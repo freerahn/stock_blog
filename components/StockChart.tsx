@@ -15,7 +15,7 @@ interface StockDataPoint {
   price: number
 }
 
-type Period = '1d' | '1w' | '3m' | '1y' | '3y'
+type Period = '1w' | '3m' | '1y' | '3y'
 
 export default function StockChart({ stockSymbol, stockName }: StockChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -167,16 +167,6 @@ export default function StockChart({ stockSymbol, stockName }: StockChartProps) 
       {/* 기간 선택 버튼 */}
       <div className="flex gap-2 mb-4 justify-center flex-wrap">
         <button
-          onClick={() => handlePeriodChange('1d')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-            period === '1d'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-        >
-          1일
-        </button>
-        <button
           onClick={() => handlePeriodChange('1w')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
             period === '1w'
@@ -237,10 +227,6 @@ function filterDataByPeriod(data: StockDataPoint[], period: Period): StockDataPo
   let startDate = new Date(today)
 
   switch (period) {
-    case '1d':
-      // 최근 1일 (당일)
-      startDate = new Date(today)
-      break
     case '1w':
       // 최근 1주일
       startDate.setDate(today.getDate() - 7)
@@ -271,11 +257,26 @@ function filterDataByPeriod(data: StockDataPoint[], period: Period): StockDataPo
 // 주가 데이터 가져오기 함수
 async function getStockData(stockSymbol: string, range: '3m' | '3y' = '3y'): Promise<StockDataPoint[]> {
   try {
-    // Yahoo Finance API를 통한 주가 데이터 가져오기 시도
+    // 한국 주식은 6자리 종목 코드를 사용 (예: 005930.KS)
+    // 종목 코드가 6자리 숫자인지 확인
+    const cleanSymbol = stockSymbol.trim()
+    if (!/^\d{6}$/.test(cleanSymbol)) {
+      console.warn('종목 코드 형식이 올바르지 않습니다:', cleanSymbol)
+      throw new Error('Invalid stock symbol format')
+    }
+
+    // Yahoo Finance API를 통한 주가 데이터 가져오기
     const apiRange = range === '3y' ? '3y' : '3mo'
-    const response = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${stockSymbol}.KS?interval=1d&range=${apiRange}`
-    )
+    const yahooSymbol = `${cleanSymbol}.KS`
+    
+    const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=${apiRange}`
+    
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    })
 
     if (response.ok) {
       const data = await response.json()
@@ -285,24 +286,45 @@ async function getStockData(stockSymbol: string, range: '3m' | '3y' = '3y'): Pro
         const timestamps = result.timestamp
         const closes = result.indicators.quote[0].close
 
-        return timestamps
-          .map((timestamp: number, index: number) => ({
-            date: new Date(timestamp * 1000).toISOString().split('T')[0],
-            price: Math.round(closes[index] || 0),
-          }))
-          .filter((point: StockDataPoint) => point.price > 0)
+        const stockData = timestamps
+          .map((timestamp: number, index: number) => {
+            const closePrice = closes[index]
+            if (!closePrice || closePrice === null || isNaN(closePrice)) {
+              return null
+            }
+            return {
+              date: new Date(timestamp * 1000).toISOString().split('T')[0],
+              price: Math.round(closePrice),
+            }
+          })
+          .filter((point: StockDataPoint | null): point is StockDataPoint => 
+            point !== null && point.price > 0
+          )
+
+        if (stockData.length > 0) {
+          console.log(`주가 데이터 로드 성공: ${stockSymbol}, ${stockData.length}개 데이터 포인트`)
+          return stockData
+        }
       }
+      
+      // 데이터가 없거나 형식이 맞지 않는 경우
+      console.warn('Yahoo Finance API 응답에 유효한 데이터가 없습니다:', result)
+    } else {
+      console.warn('Yahoo Finance API 응답 오류:', response.status, response.statusText)
     }
   } catch (error) {
-    console.warn('Yahoo Finance API 실패, 시뮬레이션 데이터 사용:', error)
+    console.error('Yahoo Finance API 호출 실패:', error)
+    console.warn('시뮬레이션 데이터를 사용합니다.')
   }
 
-  // API 실패 시 시뮬레이션 데이터 생성
+  // API 실패 시 시뮬레이션 데이터 생성 (실제 주가와 유사하게)
   return generateSimulatedStockData(stockSymbol, range)
 }
 
-// 시뮬레이션 주가 데이터 생성
+// 시뮬레이션 주가 데이터 생성 (API 실패 시에만 사용)
 function generateSimulatedStockData(stockSymbol: string, range: '3m' | '3y' = '3y'): StockDataPoint[] {
+  console.warn(`⚠️ 실제 주가 데이터를 가져올 수 없어 시뮬레이션 데이터를 사용합니다. 종목: ${stockSymbol}`)
+  
   const data: StockDataPoint[] = []
   const today = new Date()
   const startDate = new Date(today)
@@ -313,14 +335,18 @@ function generateSimulatedStockData(stockSymbol: string, range: '3m' | '3y' = '3
     startDate.setMonth(today.getMonth() - 3)
   }
 
-  // 종목 코드에 따른 기본 주가 설정
+  // 실제 한국 주식의 평균 주가 범위를 고려한 기본 주가 설정
   const basePrices: { [key: string]: number } = {
     '079160': 6000, // CJ CGV
     '084990': 5000, // 헬릭스미스
     '035720': 4000, // 카티스
+    '005930': 70000, // 삼성전자
+    '000660': 50000, // SK하이닉스
+    '035420': 200000, // NAVER
+    '051910': 100000, // LG화학
   }
 
-  const basePrice = basePrices[stockSymbol] || 5000
+  const basePrice = basePrices[stockSymbol] || 10000
   let currentPrice = basePrice
 
   // 기간 동안의 일별 데이터 생성
@@ -350,12 +376,7 @@ function generateSimulatedStockData(stockSymbol: string, range: '3m' | '3y' = '3
 function formatDate(dateString: string, period: Period): string {
   const date = new Date(dateString)
   
-  if (period === '1d') {
-    // 1일: 시간까지 표시
-    const hours = String(date.getHours()).padStart(2, '0')
-    const minutes = String(date.getMinutes()).padStart(2, '0')
-    return `${hours}:${minutes}`
-  } else if (period === '1w') {
+  if (period === '1w') {
     // 1주일: 월/일
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')

@@ -137,6 +137,15 @@ class Router {
         if (post.images.length > 0) {
             this.updateMetaTag('og:image', post.images[0], true);
         }
+        this.updateMetaTag('twitter:card', 'summary_large_image');
+        this.updateMetaTag('twitter:title', post.title);
+        this.updateMetaTag('twitter:description', description);
+        if (post.images.length > 0) {
+            this.updateMetaTag('twitter:image', post.images[0]);
+        }
+
+        // 구조화된 데이터 (JSON-LD) 추가
+        this.addStructuredData(post, description);
 
         const app = document.getElementById('app');
         app.innerHTML = `
@@ -594,6 +603,50 @@ class Router {
             document.head.appendChild(meta);
         }
         meta.setAttribute('content', content);
+    }
+
+    addStructuredData(post, description) {
+        // 기존 구조화된 데이터 제거
+        const existingScript = document.querySelector('script[type="application/ld+json"]');
+        if (existingScript) {
+            existingScript.remove();
+        }
+
+        // 새로운 구조화된 데이터 생성
+        const jsonLd = {
+            '@context': 'https://schema.org',
+            '@type': 'BlogPosting',
+            headline: post.title,
+            description: post.excerpt || description,
+            image: post.images.length > 0 ? post.images : undefined,
+            datePublished: post.createdAt,
+            dateModified: post.updatedAt || post.createdAt,
+            author: {
+                '@type': 'Person',
+                name: post.author || 'investa',
+            },
+            publisher: {
+                '@type': 'Organization',
+                name: 'investa의 투자 정보',
+            },
+            keywords: post.tags.join(', '),
+            articleSection: '주식 분석',
+        };
+
+        // 종목 정보가 있으면 추가
+        if (post.stockSymbol && post.stockName) {
+            jsonLd.about = {
+                '@type': 'FinancialProduct',
+                name: post.stockName,
+                tickerSymbol: post.stockSymbol,
+            };
+        }
+
+        // 스크립트 태그로 추가
+        const script = document.createElement('script');
+        script.type = 'application/ld+json';
+        script.textContent = JSON.stringify(jsonLd);
+        document.head.appendChild(script);
     }
 
     escapeHtml(text) {

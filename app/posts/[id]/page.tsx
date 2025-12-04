@@ -28,13 +28,13 @@ export default function PostPage() {
       await syncPostsFromGitHub()
       
       // 동기화 후 게시글 로드
-      const foundPost = getPostById(id)
+      const foundPost = await getPostById(id)
       if (!foundPost) {
         router.push('/')
         return
       }
       setPost(foundPost)
-      setRecentPosts(getLatestPosts(6))
+      setRecentPosts(await getLatestPosts(6))
     }
     
     loadPost()

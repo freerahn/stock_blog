@@ -120,3 +120,4 @@ service cloud.firestore {
 - Firebase Console에서 사용량 모니터링 설정 가능
 - 일일 제한 초과 시 알림 받기 가능
 
+

@@ -17,7 +17,7 @@ export default function Home() {
       await syncPostsFromGitHub()
       
       // 동기화 후 게시글 로드
-      setPosts(getLatestPosts(12))
+      setPosts(await getLatestPosts(12))
     }
     
     loadPosts()

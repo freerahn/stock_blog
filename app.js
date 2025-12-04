@@ -1,8 +1,10 @@
-// 데이터 저장소 (localStorage + Firebase)
+// 데이터 저장소 (Cloudflare D1 + localStorage 백업)
 const STORAGE_KEY = 'stock_blog_posts';
 const GITHUB_POSTS_URL = 'https://raw.githubusercontent.com/freerahn/stock_blog/main/public/posts.json';
 const SYNC_KEY = 'stock_blog_last_sync';
 const FIREBASE_COLLECTION = 'posts';
+// Cloudflare D1 API 엔드포인트 (배포 후 실제 URL로 변경)
+const D1_API_URL = process.env.D1_API_URL || 'https://stock-blog-api.YOUR_SUBDOMAIN.workers.dev/api/posts';
 
 // GitHub에서 게시글 데이터 동기화
 async function syncPostsFromGitHub() {
@@ -86,35 +88,49 @@ function autoSyncPosts() {
     });
 }
 
-// 주기적으로 최신 데이터 동기화 (10초마다)
+// Cloudflare D1에서 게시글 데이터 동기화
+async function syncPostsFromD1() {
+    try {
+        const posts = await getAllPosts();
+        if (posts && posts.length >= 0) {
+            localStorage.setItem(SYNC_KEY, Date.now().toString());
+            return true;
+        }
+    } catch (error) {
+        console.warn('D1 동기화 실패:', error);
+    }
+    return false;
+}
+
+// 주기적으로 최신 데이터 동기화 (5초마다 - D1은 빠르므로)
 function startPeriodicSync() {
     setInterval(() => {
-        syncPostsFromGitHub().then(synced => {
+        syncPostsFromD1().then(synced => {
             if (synced) {
                 localStorage.setItem(SYNC_KEY, Date.now().toString());
                 // 동기화 성공 시 페이지 재렌더링
                 if (window.router) {
                     const currentHash = window.location.hash;
                     if (!currentHash || currentHash === '#/' || currentHash === '#') {
-                        window.router.renderHome();
+                        window.router.renderHome().catch(err => console.error('renderHome error:', err));
                     }
                 }
             }
         });
-    }, 10000); // 10초마다
+    }, 5000); // 5초마다 (D1은 빠르므로)
 }
 
 // 페이지 포커스 시 최신 데이터 가져오기
 function setupFocusSync() {
     window.addEventListener('focus', () => {
         console.log('🔄 페이지 포커스 - 최신 데이터 동기화 중...');
-        syncPostsFromGitHub().then(synced => {
+        syncPostsFromD1().then(synced => {
             if (synced) {
                 localStorage.setItem(SYNC_KEY, Date.now().toString());
                 if (window.router) {
                     const currentHash = window.location.hash;
                     if (!currentHash || currentHash === '#/' || currentHash === '#') {
-                        window.router.renderHome();
+                        window.router.renderHome().catch(err => console.error('renderHome error:', err));
                     }
                 }
             }
@@ -122,7 +138,30 @@ function setupFocusSync() {
     });
 }
 
-function getAllPosts() {
+async function getAllPosts() {
+    // Cloudflare D1에서 최신 데이터 가져오기
+    try {
+        const response = await fetch(D1_API_URL, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+            },
+            cache: 'no-store',
+        });
+
+        if (response.ok) {
+            const posts = await response.json();
+            // D1에서 가져온 데이터를 localStorage에 캐시
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+            localStorage.setItem(SYNC_KEY, Date.now().toString());
+            console.log(`✅ D1에서 ${posts.length}개의 게시글을 가져왔습니다.`);
+            return posts;
+        }
+    } catch (error) {
+        console.warn('D1 조회 실패, localStorage 사용:', error);
+    }
+
+    // D1 실패 시 localStorage에서 가져오기
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) return [];
@@ -133,20 +172,45 @@ function getAllPosts() {
     }
 }
 
-function getPostById(id) {
-    const posts = getAllPosts();
+// 동기 함수 버전 (기존 코드 호환성)
+function getAllPostsSync() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) return [];
+        return JSON.parse(stored);
+    } catch (error) {
+        console.error('Error loading posts:', error);
+        return [];
+    }
+}
+
+async function getPostById(id) {
+    const posts = await getAllPosts();
     return posts.find(post => post.id === id) || null;
 }
 
-function getLatestPosts(limit = 10) {
-    const posts = getAllPosts();
+async function getLatestPosts(limit = 10) {
+    const posts = await getAllPosts();
+    return posts
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, limit);
+}
+
+// 동기 함수 버전 (기존 코드 호환성)
+function getPostByIdSync(id) {
+    const posts = getAllPostsSync();
+    return posts.find(post => post.id === id) || null;
+}
+
+function getLatestPostsSync(limit = 10) {
+    const posts = getAllPostsSync();
     return posts
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, limit);
 }
 
 async function savePost(post) {
-    const posts = getAllPosts();
+    const posts = getAllPostsSync(); // 저장 전에는 로컬 데이터 확인
     const existingIndex = posts.findIndex(p => p.id === post.id);
     
     if (existingIndex >= 0) {
@@ -299,7 +363,7 @@ function setupFirebaseRealtimeSync() {
             });
             
             // Firebase 데이터를 localStorage에 동기화
-            const currentPosts = getAllPosts();
+            const currentPosts = getAllPostsSync();
             const mergedPosts = [...posts];
             
             // 로컬에만 있는 최신 데이터 병합
@@ -531,20 +595,20 @@ class Router {
         this.currentRoute = hash || '/';
         
         if (this.currentRoute === '/' || this.currentRoute === '') {
-            this.renderHome();
+            this.renderHome().catch(err => console.error('renderHome error:', err));
         } else if (this.currentRoute === '/write3') {
             this.renderWrite();
         } else if (this.currentRoute.startsWith('/posts/')) {
             const postId = this.currentRoute.split('/posts/')[1];
-            this.renderPost(postId);
+            this.renderPost(postId).catch(err => console.error('renderPost error:', err));
         } else {
-            this.renderHome();
+            this.renderHome().catch(err => console.error('renderHome error:', err));
         }
     }
 
-    renderHome() {
-        const posts = getLatestPosts(12);
-        const allPosts = getAllPosts();
+    async renderHome() {
+        const posts = await getLatestPosts(12);
+        const allPosts = await getAllPosts();
         
         // 홈페이지 로드 시 사이트맵 업데이트
         updateSitemap(allPosts);
@@ -580,7 +644,7 @@ class Router {
         }
         
         // 게시글 조회 시 사이트맵도 업데이트 (수정된 경우)
-        const allPosts = getAllPosts();
+        const allPosts = await getAllPosts();
         updateSitemap(allPosts);
 
         // 조회수 기록
@@ -588,7 +652,7 @@ class Router {
             window.statsTracker.recordView(postId);
         }
 
-        const recentPosts = getLatestPosts(6);
+        const recentPosts = await getLatestPosts(6);
         const description = post.tags.length > 0 
             ? `${post.excerpt} | 태그: ${post.tags.join(', ')}`
             : post.excerpt;

@@ -17,3 +17,4 @@ window.firebaseConfigured = (
     window.firebaseConfig.projectId !== "YOUR_PROJECT_ID"
 );
 
+

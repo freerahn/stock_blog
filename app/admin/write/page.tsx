@@ -39,12 +39,11 @@ export default function WritePage() {
         updatedAt: new Date().toISOString(),
       }
 
-      const { savePost } = await import('@/lib/posts-client')
-      const { getAllPosts } = await import('@/lib/posts-client')
-      savePost(newPost)
+      const { savePost, getAllPosts } = await import('@/lib/posts-client')
+      await savePost(newPost)
       
       // 사이트맵 자동 업데이트
-      const allPosts = getAllPosts()
+      const allPosts = await getAllPosts()
       const { updateSitemap } = await import('@/lib/sitemap-generator')
       updateSitemap(allPosts)
       

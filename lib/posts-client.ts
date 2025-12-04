@@ -72,8 +72,53 @@ async function syncPostsFromGitHub(): Promise<boolean> {
   return false;
 }
 
-// localStorage에서 모든 포스트 가져오기
-export function getAllPosts(): BlogPost[] {
+// Cloudflare D1 API 엔드포인트
+// 배포 후: window.D1_API_URL = 'https://stock-blog-api.YOUR_SUBDOMAIN.workers.dev/api/posts';
+const D1_API_URL = (typeof window !== 'undefined' && (window as any).D1_API_URL) 
+  ? (window as any).D1_API_URL 
+  : 'https://stock-blog-api.YOUR_SUBDOMAIN.workers.dev/api/posts';
+
+export async function getAllPosts(): Promise<BlogPost[]> {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  
+  // Cloudflare D1에서 최신 데이터 가져오기
+  try {
+    const response = await fetch(D1_API_URL, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      cache: 'no-store',
+    });
+
+    if (response.ok) {
+      const posts = await response.json();
+      // D1에서 가져온 데이터를 localStorage에 캐시
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+      console.log(`✅ D1에서 ${posts.length}개의 게시글을 가져왔습니다.`);
+      return posts;
+    }
+  } catch (error) {
+    console.warn('D1 조회 실패, localStorage 사용:', error);
+  }
+
+  // D1 실패 시 localStorage에서 가져오기
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      return [];
+    }
+    return JSON.parse(stored);
+  } catch (error) {
+    console.error('Error loading posts:', error);
+    return [];
+  }
+}
+
+// 동기 함수 버전 (기존 코드 호환성)
+export function getAllPostsSync(): BlogPost[] {
   if (typeof window === 'undefined') {
     return [];
   }
@@ -116,33 +161,76 @@ export function getLatestPosts(limit: number = 10): BlogPost[] {
 }
 
 // 포스트 저장
-export function savePost(post: BlogPost): void {
-  const posts = getAllPosts();
-  const existingIndex = posts.findIndex(p => p.id === post.id);
+export async function savePost(post: BlogPost): Promise<void> {
+  // Cloudflare D1에 저장 (우선 사용)
+  try {
+    await savePostToD1(post);
+    console.log('✅ Cloudflare D1에 저장 완료 - 다른 브라우저에서 즉시 볼 수 있습니다!');
+  } catch (d1Error) {
+    console.error('D1 저장 실패:', d1Error);
+    // D1 실패 시 localStorage에 저장 (백업)
+    const posts = getAllPostsSync();
+    const existingIndex = posts.findIndex(p => p.id === post.id);
+    if (existingIndex >= 0) {
+      posts[existingIndex] = post;
+    } else {
+      posts.push(post);
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+    console.warn('⚠️ D1 저장 실패, localStorage에 백업 저장했습니다.');
+  }
   
+  // localStorage에도 저장 (오프라인 지원)
+  const posts = getAllPostsSync();
+  const existingIndex = posts.findIndex(p => p.id === post.id);
   if (existingIndex >= 0) {
     posts[existingIndex] = post;
   } else {
     posts.push(post);
   }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+  
+  // 사이트맵 자동 업데이트
+  if (typeof window !== 'undefined') {
+    import('./sitemap-generator').then(({ updateSitemap }) => {
+      updateSitemap(posts);
+    }).catch(error => {
+      console.warn('사이트맵 업데이트 실패:', error);
+    });
+  }
+}
+
+// Cloudflare D1에 포스트 저장
+async function savePostToD1(post: BlogPost): Promise<void> {
+  if (typeof window === 'undefined') return;
+  
+  const apiUrl = typeof window !== 'undefined' 
+    ? (window.D1_API_URL || 'https://stock-blog-api.YOUR_SUBDOMAIN.workers.dev/api/posts')
+    : '';
+  
+  if (!apiUrl || apiUrl.includes('YOUR_SUBDOMAIN')) {
+    throw new Error('D1 API URL이 설정되지 않았습니다. CLOUDFLARE_D1_SETUP.md를 참고하세요.');
+  }
   
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
-    
-    // 사이트맵 자동 업데이트
-    if (typeof window !== 'undefined') {
-      import('./sitemap-generator').then(({ updateSitemap }) => {
-        updateSitemap(posts);
-      }).catch(error => {
-        console.warn('사이트맵 업데이트 실패:', error);
-      });
-      
-      // GitHub 자동 업로드
-      autoUploadToGitHubHelper(posts);
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(post),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'D1 저장 실패');
     }
+
+    const result = await response.json();
+    return;
   } catch (error) {
-    console.error('Error saving post:', error);
-    throw new Error('포스트 저장에 실패했습니다.');
+    console.error('D1 저장 오류:', error);
+    throw error;
   }
 }
 

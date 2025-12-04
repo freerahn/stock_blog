@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "wrangler": "wrangler",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply stock-blog-db",
+    "db:create": "wrangler d1 create stock-blog-db"
   },
   "dependencies": {
     "next": "^14.2.0",
@@ -26,7 +30,9 @@
     "eslint-config-next": "^14.2.0",
     "tailwindcss": "^3.4.1",
     "postcss": "^8.4.35",
-    "autoprefixer": "^10.4.17"
+    "autoprefixer": "^10.4.17",
+    "wrangler": "^3.0.0",
+    "@cloudflare/workers-types": "^4.20240117.0"
   }
 }
 

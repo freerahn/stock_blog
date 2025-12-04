@@ -1,7 +1,8 @@
-// 데이터 저장소 (localStorage)
+// 데이터 저장소 (localStorage + Firebase)
 const STORAGE_KEY = 'stock_blog_posts';
 const GITHUB_POSTS_URL = 'https://raw.githubusercontent.com/freerahn/stock_blog/main/public/posts.json';
 const SYNC_KEY = 'stock_blog_last_sync';
+const FIREBASE_COLLECTION = 'posts';
 
 // GitHub에서 게시글 데이터 동기화
 async function syncPostsFromGitHub() {
@@ -103,7 +104,7 @@ function getLatestPosts(limit = 10) {
         .slice(0, limit);
 }
 
-function savePost(post) {
+async function savePost(post) {
     const posts = getAllPosts();
     const existingIndex = posts.findIndex(p => p.id === post.id);
     
@@ -114,12 +115,16 @@ function savePost(post) {
     }
     
     try {
+        // localStorage에 저장 (백업용)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+        
+        // Firebase에 저장 (실시간 동기화) - 우선 사용
+        await savePostToFirebase(post);
         
         // 사이트맵 자동 업데이트
         updateSitemap(posts);
         
-        // GitHub에 자동 업로드
+        // GitHub에 자동 업로드 (백업용)
         autoUploadToGitHub(posts);
     } catch (error) {
         console.error('Error saving post:', error);
@@ -894,3 +899,45 @@ class Router {
 // 라우터 초기화
 const router = new Router();
 window.router = router; // 전역으로 노출 (동기화 후 재렌더링용)
+
+// 페이지 로드 시 Firebase 초기화 및 동기화
+document.addEventListener('DOMContentLoaded', async () => {
+    // Firebase 실시간 동기화 설정
+    setTimeout(() => {
+        setupFirebaseRealtimeSync();
+    }, 1000); // Firebase SDK 로드 대기
+    
+    // Firebase에서 초기 데이터 로드
+    setTimeout(async () => {
+        if (window.firebaseInitialized) {
+            const firebasePosts = await getPostsFromFirebase();
+            if (firebasePosts.length > 0) {
+                const localPosts = getAllPosts();
+                const mergedPosts = [...firebasePosts];
+                
+                // 로컬에만 있는 최신 데이터 병합
+                localPosts.forEach(localPost => {
+                    const existingIndex = mergedPosts.findIndex(p => p.id === localPost.id);
+                    if (existingIndex < 0) {
+                        mergedPosts.push(localPost);
+                    } else {
+                        const localDate = new Date(localPost.updatedAt || localPost.createdAt);
+                        const firebaseDate = new Date(mergedPosts[existingIndex].updatedAt || mergedPosts[existingIndex].createdAt);
+                        if (localDate > firebaseDate) {
+                            mergedPosts[existingIndex] = localPost;
+                            savePostToFirebase(localPost);
+                        }
+                    }
+                });
+                
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedPosts));
+                console.log('✅ Firebase에서 초기 데이터 로드 완료:', mergedPosts.length, '개');
+                
+                // 페이지 재렌더링
+                if (router.currentRoute) {
+                    router.render();
+                }
+            }
+        }
+    }, 2000);
+});

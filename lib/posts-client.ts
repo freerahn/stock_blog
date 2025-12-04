@@ -137,8 +137,8 @@ export function savePost(post: BlogPost): void {
         console.warn('사이트맵 업데이트 실패:', error);
       });
       
-      // GitHub 업로드 안내
-      uploadToGitHubHelper(posts);
+      // GitHub 자동 업로드
+      autoUploadToGitHubHelper(posts);
     }
   } catch (error) {
     console.error('Error saving post:', error);
@@ -146,41 +146,74 @@ export function savePost(post: BlogPost): void {
   }
 }
 
-// GitHub 업로드 안내 (Next.js용)
-function uploadToGitHubHelper(posts: BlogPost[]) {
-  const dataStr = JSON.stringify(posts, null, 2);
-  const dataBlob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(dataBlob);
+// GitHub 자동 업로드 (Next.js용)
+async function autoUploadToGitHubHelper(posts: BlogPost[]) {
+  const GITHUB_TOKEN_KEY = 'github_personal_access_token';
+  const GITHUB_REPO = 'freerahn/stock_blog';
+  const GITHUB_FILE_PATH = 'public/posts.json';
   
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'posts.json';
-  link.style.display = 'none';
-  document.body.appendChild(link);
+  const token = localStorage.getItem(GITHUB_TOKEN_KEY);
   
-  const shouldUpload = confirm(
-    '✅ 게시글이 저장되었습니다!\n\n' +
-    '다른 브라우저에서도 보려면 GitHub에 업로드해야 합니다.\n\n' +
-    '[확인] = posts.json 파일 다운로드 (GitHub의 public/posts.json에 업로드)\n' +
-    '[취소] = 나중에 관리자 페이지에서 백업'
-  );
-  
-  if (shouldUpload) {
-    link.click();
-    alert(
-      '📥 posts.json 파일이 다운로드되었습니다.\n\n' +
-      '다음 단계:\n' +
-      '1. GitHub 저장소로 이동: https://github.com/freerahn/stock_blog\n' +
-      '2. public/posts.json 파일 클릭\n' +
-      '3. 연필 아이콘(편집) 클릭\n' +
-      '4. 다운로드한 posts.json 내용을 붙여넣기\n' +
-      '5. "Commit changes" 클릭\n\n' +
-      '업로드 후 다른 브라우저에서 페이지를 새로고침하면 게시글이 보입니다!'
-    );
+  if (!token) {
+    // 토큰이 없으면 조용히 실패
+    console.log('💡 GitHub 토큰이 설정되지 않았습니다. 관리자 페이지에서 설정하세요.');
+    return;
   }
   
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  try {
+    const content = JSON.stringify(posts, null, 2);
+    const contentBase64 = btoa(unescape(encodeURIComponent(content)));
+    
+    // 먼저 파일이 존재하는지 확인 (SHA 필요)
+    let sha = null;
+    try {
+      const getFileResponse = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `token ${token}`,
+            'Accept': 'application/vnd.github.v3+json',
+          }
+        }
+      );
+      
+      if (getFileResponse.ok) {
+        const fileData = await getFileResponse.json();
+        sha = fileData.sha;
+      }
+    } catch (error) {
+      // 파일이 없을 수 있음 (정상)
+    }
+    
+    // 파일 업로드/업데이트
+    const uploadResponse = await fetch(
+      `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: `Update posts.json - ${new Date().toISOString()}`,
+          content: contentBase64,
+          ...(sha && { sha: sha })
+        })
+      }
+    );
+    
+    if (uploadResponse.ok) {
+      console.log('✅ GitHub에 자동 업로드되었습니다!');
+    } else {
+      const errorData = await uploadResponse.json();
+      throw new Error(errorData.message || '업로드 실패');
+    }
+  } catch (error) {
+    console.error('GitHub 자동 업로드 실패:', error);
+    // 실패해도 게시글은 저장되었으므로 조용히 실패
+  }
 }
 
 // 포스트 삭제

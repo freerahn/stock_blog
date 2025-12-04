@@ -59,6 +59,13 @@
                 <h1 class="text-2xl font-bold text-blue-600">관리자 페이지</h1>
                 <div class="flex items-center gap-4">
                     <button 
+                        onclick="showGitHubTokenModal()"
+                        class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition text-sm"
+                        title="GitHub 자동 업로드 설정"
+                    >
+                        ⚙️ GitHub 설정
+                    </button>
+                    <button 
                         onclick="goToWritePage()"
                         class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
                     >
@@ -180,6 +187,49 @@
     </div>
     </div>
     <!-- 메인 컨텐츠 끝 -->
+
+    <!-- GitHub 토큰 설정 모달 -->
+    <div id="github-token-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold text-gray-900 mb-4">GitHub 자동 업로드 설정</h3>
+            <p class="text-gray-600 mb-4 text-sm">
+                글을 저장하면 자동으로 GitHub에 업로드되어 다른 브라우저에서도 볼 수 있습니다.
+            </p>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    GitHub Personal Access Token
+                </label>
+                <input 
+                    type="password" 
+                    id="github-token-input" 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="ghp_xxxxxxxxxxxx"
+                >
+                <p class="text-xs text-gray-500 mt-2">
+                    토큰 생성 방법: 
+                    <a href="https://github.com/settings/tokens" target="_blank" class="text-blue-600 underline">
+                        GitHub Settings → Developer settings → Personal access tokens
+                    </a>
+                    <br>
+                    권한: <code class="bg-gray-100 px-1 rounded">repo</code> (전체 저장소 접근)
+                </p>
+            </div>
+            <div class="flex gap-2">
+                <button 
+                    onclick="saveGitHubToken()"
+                    class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                    저장
+                </button>
+                <button 
+                    onclick="closeGitHubTokenModal()"
+                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                >
+                    취소
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- 수정 모달 -->
     <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
@@ -322,6 +372,9 @@
     <script>
         const STORAGE_KEY = 'stock_blog_posts';
         const STATS_KEY = 'stock_blog_stats';
+        const GITHUB_TOKEN_KEY = 'github_personal_access_token';
+        const GITHUB_REPO = 'freerahn/stock_blog';
+        const GITHUB_FILE_PATH = 'public/posts.json';
         
         // 게시글 관련 함수들
         function getAllPosts() {
@@ -351,11 +404,145 @@
                 // 사이트맵 자동 업데이트
                 updateSitemap(posts);
                 
+                // GitHub에 자동 업로드
+                autoUploadToGitHub(posts);
+                
                 return true;
             } catch (error) {
                 console.error('Error saving post:', error);
                 return false;
             }
+        }
+        
+        // GitHub에 자동 업로드
+        async function autoUploadToGitHub(posts) {
+            const token = localStorage.getItem(GITHUB_TOKEN_KEY);
+            
+            if (!token) {
+                // 토큰이 없으면 안내만 표시
+                console.log('💡 GitHub 토큰이 설정되지 않았습니다. 관리자 페이지에서 설정하세요.');
+                return;
+            }
+            
+            try {
+                const content = JSON.stringify(posts, null, 2);
+                const contentBase64 = btoa(unescape(encodeURIComponent(content)));
+                
+                // 먼저 파일이 존재하는지 확인 (SHA 필요)
+                let sha = null;
+                try {
+                    const getFileResponse = await fetch(
+                        `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`,
+                        {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `token ${token}`,
+                                'Accept': 'application/vnd.github.v3+json',
+                            }
+                        }
+                    );
+                    
+                    if (getFileResponse.ok) {
+                        const fileData = await getFileResponse.json();
+                        sha = fileData.sha;
+                    }
+                } catch (error) {
+                    // 파일이 없을 수 있음 (정상)
+                    console.log('파일이 없거나 확인 실패:', error);
+                }
+                
+                // 파일 업로드/업데이트
+                const uploadResponse = await fetch(
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: `Update posts.json - ${new Date().toISOString()}`,
+                            content: contentBase64,
+                            ...(sha && { sha: sha })
+                        })
+                    }
+                );
+                
+                if (uploadResponse.ok) {
+                    console.log('✅ GitHub에 자동 업로드되었습니다!');
+                    const messageDiv = document.getElementById('import-message');
+                    if (messageDiv) {
+                        messageDiv.className = 'mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg';
+                        messageDiv.textContent = '✅ GitHub에 자동 업로드되었습니다! 다른 브라우저에서도 바로 볼 수 있습니다.';
+                        messageDiv.classList.remove('hidden');
+                        setTimeout(() => {
+                            messageDiv.classList.add('hidden');
+                        }, 3000);
+                    }
+                } else {
+                    const errorData = await uploadResponse.json();
+                    throw new Error(errorData.message || '업로드 실패');
+                }
+            } catch (error) {
+                console.error('GitHub 자동 업로드 실패:', error);
+                // 실패해도 게시글은 저장되었으므로 경고만 표시
+                const messageDiv = document.getElementById('import-message');
+                if (messageDiv) {
+                    messageDiv.className = 'mb-4 p-4 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded-lg';
+                    messageDiv.textContent = '⚠️ GitHub 자동 업로드 실패. 게시글은 저장되었지만 다른 브라우저에서는 보이지 않을 수 있습니다.';
+                    messageDiv.classList.remove('hidden');
+                    setTimeout(() => {
+                        messageDiv.classList.add('hidden');
+                    }, 5000);
+                }
+            }
+        }
+        
+        // GitHub 토큰 설정 모달
+        function showGitHubTokenModal() {
+            const modal = document.getElementById('github-token-modal');
+            const tokenInput = document.getElementById('github-token-input');
+            const savedToken = localStorage.getItem(GITHUB_TOKEN_KEY);
+            
+            if (savedToken) {
+                tokenInput.value = savedToken.substring(0, 10) + '...'; // 일부만 표시
+                tokenInput.placeholder = '기존 토큰이 설정되어 있습니다';
+            } else {
+                tokenInput.value = '';
+                tokenInput.placeholder = 'ghp_xxxxxxxxxxxx';
+            }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            tokenInput.focus();
+        }
+        
+        function closeGitHubTokenModal() {
+            const modal = document.getElementById('github-token-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('github-token-input').value = '';
+        }
+        
+        function saveGitHubToken() {
+            const tokenInput = document.getElementById('github-token-input');
+            const token = tokenInput.value.trim();
+            
+            if (!token) {
+                alert('토큰을 입력해주세요.');
+                return;
+            }
+            
+            if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+                if (!confirm('토큰 형식이 올바르지 않을 수 있습니다. 계속하시겠습니까?')) {
+                    return;
+                }
+            }
+            
+            localStorage.setItem(GITHUB_TOKEN_KEY, token);
+            alert('✅ GitHub 토큰이 저장되었습니다. 이제 글을 저장하면 자동으로 GitHub에 업로드됩니다!');
+            closeGitHubTokenModal();
         }
         
         function deletePost(id) {

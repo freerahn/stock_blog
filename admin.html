@@ -20,6 +20,35 @@
     </style>
 </head>
 <body class="bg-gray-50">
+    <!-- 비밀번호 입력 모달 -->
+    <div id="password-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">관리자 페이지 접근</h2>
+            <p class="text-gray-600 mb-4">비밀번호를 입력하세요.</p>
+            <form id="password-form" onsubmit="checkPassword(event)" class="space-y-4">
+                <div>
+                    <input 
+                        type="password" 
+                        id="password-input" 
+                        required
+                        autofocus
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="비밀번호 입력"
+                    >
+                </div>
+                <div id="password-error" class="text-red-600 text-sm hidden"></div>
+                <button 
+                    type="submit"
+                    class="w-full px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                    확인
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 메인 컨텐츠 (비밀번호 인증 후 표시) -->
+    <div id="main-content" class="hidden">
     <!-- 헤더 -->
     <header class="bg-white shadow-sm border-b">
         <div class="container mx-auto px-4">
@@ -100,6 +129,8 @@
             </div>
         </div>
     </div>
+    </div>
+    <!-- 메인 컨텐츠 끝 -->
 
     <!-- 수정 모달 -->
     <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
@@ -589,6 +620,63 @@
         document.getElementById('edit-modal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeEditModal();
+            }
+        });
+
+        // 비밀번호 확인 함수
+        const ADMIN_PASSWORD = 'lucky';
+        const AUTH_KEY = 'admin_authenticated';
+
+        function checkPassword(event) {
+            event.preventDefault();
+            const passwordInput = document.getElementById('password-input');
+            const password = passwordInput.value;
+            const errorDiv = document.getElementById('password-error');
+            const passwordModal = document.getElementById('password-modal');
+            const mainContent = document.getElementById('main-content');
+
+            if (password === ADMIN_PASSWORD) {
+                // 비밀번호가 맞으면 세션 스토리지에 인증 상태 저장
+                sessionStorage.setItem(AUTH_KEY, 'true');
+                passwordModal.classList.add('hidden');
+                mainContent.classList.remove('hidden');
+            } else {
+                // 비밀번호가 틀리면 오류 메시지 표시
+                errorDiv.textContent = '비밀번호가 올바르지 않습니다.';
+                errorDiv.classList.remove('hidden');
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+        }
+
+        // 페이지 로드 시 인증 상태 확인
+        document.addEventListener('DOMContentLoaded', function() {
+            const isAuthenticated = sessionStorage.getItem(AUTH_KEY) === 'true';
+            const passwordModal = document.getElementById('password-modal');
+            const mainContent = document.getElementById('main-content');
+
+            if (isAuthenticated) {
+                // 이미 인증된 경우 모달 숨기고 컨텐츠 표시
+                passwordModal.classList.add('hidden');
+                mainContent.classList.remove('hidden');
+            } else {
+                // 인증되지 않은 경우 모달 표시하고 컨텐츠 숨기기
+                passwordModal.classList.remove('hidden');
+                mainContent.classList.add('hidden');
+            }
+
+            // Enter 키로 비밀번호 입력 가능
+            const passwordInput = document.getElementById('password-input');
+            if (passwordInput) {
+                passwordInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const form = document.getElementById('password-form');
+                        if (form) {
+                            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                        }
+                    }
+                });
             }
         });
     </script>

@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 페이지 - 주식 종목 분석 블로그</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .active-tab {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 헤더 -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <h1 class="text-2xl font-bold text-blue-600">관리자 페이지</h1>
+                <div class="flex items-center gap-4">
+                    <button 
+                        onclick="goToWritePage()"
+                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                    >
+                        글쓰기
+                    </button>
+                    <a 
+                        href="index.html" 
+                        class="text-gray-700 hover:text-blue-600 transition"
+                    >
+                        홈으로
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- 탭 메뉴 -->
+        <div class="mb-8">
+            <div class="flex gap-2 border-b">
+                <button 
+                    onclick="switchTab('posts')" 
+                    id="tab-posts"
+                    class="px-6 py-3 font-medium text-gray-700 hover:text-blue-600 transition active-tab"
+                >
+                    게시글 관리
+                </button>
+                <button 
+                    onclick="switchTab('stats')" 
+                    id="tab-stats"
+                    class="px-6 py-3 font-medium text-gray-700 hover:text-blue-600 transition"
+                >
+                    통계 관리
+                </button>
+            </div>
+        </div>
+
+        <!-- 게시글 관리 탭 -->
+        <div id="content-posts" class="tab-content active">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">게시글 관리</h2>
+                    <button 
+                        onclick="loadPosts()" 
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                    >
+                        새로고침
+                    </button>
+                </div>
+                
+                <div id="posts-list" class="space-y-4">
+                    <!-- 게시글 목록이 여기에 동적으로 로드됩니다 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 통계 관리 탭 -->
+        <div id="content-stats" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 일자별 방문자 -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6">일자별 방문자</h2>
+                    <canvas id="visitorChart" width="400" height="200"></canvas>
+                </div>
+                
+                <!-- 게시글별 조회수 -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6">게시글별 조회수</h2>
+                    <canvas id="viewsChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 수정 모달 -->
+    <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-900">게시글 수정</h3>
+                <button 
+                    onclick="closeEditModal()" 
+                    class="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                    ×
+                </button>
+            </div>
+            
+            <form id="edit-form" onsubmit="saveEditedPost(event)" class="space-y-4">
+                <input type="hidden" id="edit-post-id">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">제목</label>
+                    <input 
+                        type="text" 
+                        id="edit-title" 
+                        required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">요약</label>
+                    <textarea 
+                        id="edit-excerpt" 
+                        rows="3"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    ></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">본문</label>
+                    <textarea 
+                        id="edit-content" 
+                        rows="10"
+                        required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    ></textarea>
+                </div>
+                
+                <div class="flex gap-4">
+                    <button 
+                        type="submit"
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    >
+                        저장
+                    </button>
+                    <button 
+                        type="button"
+                        onclick="closeEditModal()"
+                        class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                    >
+                        취소
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'stock_blog_posts';
+        const STATS_KEY = 'stock_blog_stats';
+        
+        // 게시글 관련 함수들
+        function getAllPosts() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (!stored) return [];
+                return JSON.parse(stored);
+            } catch (error) {
+                console.error('Error loading posts:', error);
+                return [];
+            }
+        }
+        
+        function savePost(post) {
+            const posts = getAllPosts();
+            const existingIndex = posts.findIndex(p => p.id === post.id);
+            
+            if (existingIndex >= 0) {
+                posts[existingIndex] = post;
+            } else {
+                posts.push(post);
+            }
+            
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+                return true;
+            } catch (error) {
+                console.error('Error saving post:', error);
+                return false;
+            }
+        }
+        
+        function deletePost(id) {
+            const posts = getAllPosts();
+            const filteredPosts = posts.filter(post => post.id !== id);
+            
+            if (filteredPosts.length < posts.length) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(filteredPosts));
+                    return true;
+                } catch (error) {
+                    console.error('Error deleting post:', error);
+                    return false;
+                }
+            }
+            return false;
+        }
+        
+        // 통계 관련 함수들
+        function getStats() {
+            try {
+                const stored = localStorage.getItem(STATS_KEY);
+                if (!stored) return { visitors: {}, views: {} };
+                return JSON.parse(stored);
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                return { visitors: {}, views: {} };
+            }
+        }
+        
+        function saveStats(stats) {
+            try {
+                localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+                return true;
+            } catch (error) {
+                console.error('Error saving stats:', error);
+                return false;
+            }
+        }
+        
+        function recordVisitor() {
+            const today = new Date().toISOString().split('T')[0];
+            const stats = getStats();
+            
+            if (!stats.visitors[today]) {
+                stats.visitors[today] = 0;
+            }
+            stats.visitors[today]++;
+            
+            saveStats(stats);
+        }
+        
+        function recordView(postId) {
+            const stats = getStats();
+            
+            if (!stats.views[postId]) {
+                stats.views[postId] = 0;
+            }
+            stats.views[postId]++;
+            
+            saveStats(stats);
+        }
+        
+        // 탭 전환
+        function switchTab(tab) {
+            // 탭 버튼 활성화
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('active-tab');
+            });
+            document.getElementById(`tab-${tab}`).classList.add('active-tab');
+            
+            // 컨텐츠 표시
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`content-${tab}`).classList.add('active');
+            
+            // 통계 탭으로 이동 시 차트 로드
+            if (tab === 'stats') {
+                loadStats();
+            }
+        }
+        
+        // 게시글 목록 로드
+        function loadPosts() {
+            const posts = getAllPosts();
+            const postsList = document.getElementById('posts-list');
+            
+            if (posts.length === 0) {
+                postsList.innerHTML = `
+                    <div class="text-center py-12 text-gray-500">
+                        <p class="text-lg">등록된 게시글이 없습니다.</p>
+                        <a href="#" onclick="goToWritePage(); return false;" class="text-blue-600 hover:underline mt-2 inline-block">첫 글 작성하기</a>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 최신순으로 정렬
+            const sortedPosts = posts.sort((a, b) => 
+                new Date(b.createdAt || b.updatedAt) - new Date(a.createdAt || a.updatedAt)
+            );
+            
+            postsList.innerHTML = sortedPosts.map(post => {
+                const createdDate = new Date(post.createdAt || post.updatedAt);
+                const formattedDate = createdDate.toLocaleString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                const stats = getStats();
+                const viewCount = stats.views[post.id] || 0;
+                
+                return `
+                    <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex-1">
+                                <h3 class="text-lg font-semibold text-gray-900 mb-1">${escapeHtml(post.title)}</h3>
+                                <p class="text-sm text-gray-600 mb-2">${escapeHtml(post.excerpt || post.content.substring(0, 100) + '...')}</p>
+                                <div class="flex items-center gap-4 text-xs text-gray-500">
+                                    <span>작성일: ${formattedDate}</span>
+                                    <span>조회수: ${viewCount}</span>
+                                    ${post.stockName ? `<span>종목: ${escapeHtml(post.stockName)}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="flex gap-2 ml-4">
+                                <button 
+                                    onclick="editPost('${post.id}')"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+                                >
+                                    수정
+                                </button>
+                                <button 
+                                    onclick="confirmDelete('${post.id}', '${escapeHtml(post.title)}')"
+                                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
+                                >
+                                    삭제
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 게시글 수정
+        function editPost(id) {
+            const posts = getAllPosts();
+            const post = posts.find(p => p.id === id);
+            
+            if (!post) {
+                alert('게시글을 찾을 수 없습니다.');
+                return;
+            }
+            
+            document.getElementById('edit-post-id').value = post.id;
+            document.getElementById('edit-title').value = post.title;
+            document.getElementById('edit-excerpt').value = post.excerpt || '';
+            document.getElementById('edit-content').value = post.content;
+            
+            const modal = document.getElementById('edit-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        function closeEditModal() {
+            const modal = document.getElementById('edit-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+        
+        function saveEditedPost(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('edit-post-id').value;
+            const title = document.getElementById('edit-title').value;
+            const excerpt = document.getElementById('edit-excerpt').value;
+            const content = document.getElementById('edit-content').value;
+            
+            const posts = getAllPosts();
+            const post = posts.find(p => p.id === id);
+            
+            if (!post) {
+                alert('게시글을 찾을 수 없습니다.');
+                return;
+            }
+            
+            post.title = title;
+            post.excerpt = excerpt;
+            post.content = content;
+            post.updatedAt = new Date().toISOString();
+            
+            if (savePost(post)) {
+                alert('게시글이 수정되었습니다.');
+                closeEditModal();
+                loadPosts();
+            } else {
+                alert('게시글 수정에 실패했습니다.');
+            }
+        }
+        
+        // 게시글 삭제
+        function confirmDelete(id, title) {
+            if (confirm(`"${title}" 게시글을 정말 삭제하시겠습니까?`)) {
+                if (deletePost(id)) {
+                    alert('게시글이 삭제되었습니다.');
+                    loadPosts();
+                    
+                    // 통계도 삭제
+                    const stats = getStats();
+                    delete stats.views[id];
+                    saveStats(stats);
+                } else {
+                    alert('게시글 삭제에 실패했습니다.');
+                }
+            }
+        }
+        
+        // 통계 로드
+        function loadStats() {
+            const stats = getStats();
+            
+            // 일자별 방문자 차트
+            loadVisitorChart(stats.visitors);
+            
+            // 게시글별 조회수 차트
+            loadViewsChart(stats.views);
+        }
+        
+        function loadVisitorChart(visitors) {
+            const ctx = document.getElementById('visitorChart');
+            
+            // 최근 7일 데이터 정렬
+            const dates = Object.keys(visitors).sort().slice(-7);
+            const values = dates.map(date => visitors[date] || 0);
+            
+            // 날짜 포맷팅
+            const formattedDates = dates.map(date => {
+                const d = new Date(date);
+                return `${d.getMonth() + 1}/${d.getDate()}`;
+            });
+            
+            if (window.visitorChart) {
+                window.visitorChart.destroy();
+            }
+            
+            window.visitorChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: formattedDates,
+                    datasets: [{
+                        label: '방문자 수',
+                        data: values,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function loadViewsChart(views) {
+            const ctx = document.getElementById('viewsChart');
+            
+            const posts = getAllPosts();
+            
+            // 조회수가 있는 게시글만 필터링
+            const postsWithViews = posts
+                .map(post => ({
+                    title: post.title.length > 20 ? post.title.substring(0, 20) + '...' : post.title,
+                    views: views[post.id] || 0
+                }))
+                .filter(item => item.views > 0)
+                .sort((a, b) => b.views - a.views)
+                .slice(0, 10); // 상위 10개만 표시
+            
+            if (postsWithViews.length === 0) {
+                ctx.parentElement.innerHTML = `
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6">게시글별 조회수</h2>
+                    <p class="text-gray-500 text-center py-8">조회수 데이터가 없습니다.</p>
+                `;
+                return;
+            }
+            
+            const labels = postsWithViews.map(item => item.title);
+            const data = postsWithViews.map(item => item.views);
+            
+            if (window.viewsChart) {
+                window.viewsChart.destroy();
+            }
+            
+            window.viewsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '조회수',
+                        data: data,
+                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                        borderColor: 'rgb(59, 130, 246)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 유틸리티 함수
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 글쓰기 페이지로 이동
+        function goToWritePage() {
+            try {
+                // 현재 파일의 경로를 기준으로 index.html 찾기
+                let indexPath;
+                
+                if (window.location.protocol === 'file:') {
+                    // 로컬 파일 시스템인 경우
+                    const currentPath = window.location.pathname;
+                    const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                    indexPath = currentDir + 'index.html';
+                } else {
+                    // 웹 서버인 경우
+                    const currentPath = window.location.pathname;
+                    if (currentPath.includes('admin.html')) {
+                        indexPath = currentPath.replace('admin.html', 'index.html');
+                    } else {
+                        const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                        indexPath = currentDir + 'index.html';
+                    }
+                }
+                
+                // 해시와 함께 이동
+                window.location.href = indexPath + '#/write3';
+            } catch (error) {
+                console.error('Error navigating to write page:', error);
+                alert('글쓰기 페이지로 이동할 수 없습니다. index.html 파일이 같은 폴더에 있는지 확인해주세요.');
+            }
+        }
+        
+        // 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPosts();
+            recordVisitor(); // 페이지 방문 기록
+        });
+        
+        // 모달 외부 클릭 시 닫기
+        document.getElementById('edit-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
+    </script>
+</body>
+</html>
+

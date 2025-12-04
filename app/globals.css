@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 255, 255, 255;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Markdown 스타일링 */
+.prose {
+  @apply text-gray-800;
+}
+
+.prose h1 {
+  @apply text-3xl font-bold mt-8 mb-4 text-gray-900;
+}
+
+.prose h2 {
+  @apply text-2xl font-bold mt-6 mb-3 text-gray-900;
+}
+
+.prose h3 {
+  @apply text-xl font-bold mt-4 mb-2 text-gray-900;
+}
+
+.prose p {
+  @apply mb-4 leading-7;
+}
+
+.prose ul,
+.prose ol {
+  @apply mb-4 pl-6;
+}
+
+.prose ul {
+  @apply list-disc;
+}
+
+.prose ol {
+  @apply list-decimal;
+}
+
+.prose li {
+  @apply mb-2;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-primary-500 pl-4 italic my-4 text-gray-700;
+}
+
+.prose code {
+  @apply bg-gray-100 px-2 py-1 rounded text-sm font-mono;
+}
+
+.prose pre {
+  @apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0;
+}
+
+.prose a {
+  @apply text-primary-600 hover:text-primary-700 underline;
+}
+
+.prose img {
+  @apply rounded-lg my-4 max-w-full;
+}
+
+.prose table {
+  @apply w-full border-collapse mb-4;
+}
+
+.prose th,
+.prose td {
+  @apply border border-gray-300 px-4 py-2;
+}
+
+.prose th {
+  @apply bg-gray-100 font-bold;
+}

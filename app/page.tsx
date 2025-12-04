@@ -10,7 +10,19 @@ export default function Home() {
   const [posts, setPosts] = useState<BlogPost[]>([])
 
   useEffect(() => {
-    setPosts(getLatestPosts(12))
+    // GitHub에서 자동 동기화 (lib/posts-client.ts에서 처리)
+    // 동기화 후 게시글 로드
+    const loadPosts = () => {
+      setPosts(getLatestPosts(12))
+    }
+    
+    // 초기 로드
+    loadPosts()
+    
+    // 1초 후 다시 로드 (동기화 완료 후)
+    const timer = setTimeout(loadPosts, 1000)
+    
+    return () => clearTimeout(timer)
   }, [])
 
   return (

@@ -1,5 +1,79 @@
 // 데이터 저장소 (localStorage)
 const STORAGE_KEY = 'stock_blog_posts';
+const GITHUB_POSTS_URL = 'https://raw.githubusercontent.com/freerahn/stock_blog/main/public/posts.json';
+const SYNC_KEY = 'stock_blog_last_sync';
+
+// GitHub에서 게시글 데이터 동기화
+async function syncPostsFromGitHub() {
+    try {
+        const response = await fetch(GITHUB_POSTS_URL, {
+            cache: 'no-cache',
+            headers: {
+                'Accept': 'application/json',
+            }
+        });
+        
+        if (response.ok) {
+            const githubPosts = await response.json();
+            
+            if (Array.isArray(githubPosts) && githubPosts.length > 0) {
+                const localPosts = getAllPosts();
+                
+                // GitHub 데이터와 로컬 데이터 병합
+                const mergedPosts = [...localPosts];
+                githubPosts.forEach(githubPost => {
+                    const existingIndex = mergedPosts.findIndex(p => p.id === githubPost.id);
+                    if (existingIndex >= 0) {
+                        // 로컬에 있으면 더 최신 데이터 사용 (updatedAt 비교)
+                        const localPost = mergedPosts[existingIndex];
+                        const localDate = new Date(localPost.updatedAt || localPost.createdAt);
+                        const githubDate = new Date(githubPost.updatedAt || githubPost.createdAt);
+                        
+                        if (githubDate > localDate) {
+                            mergedPosts[existingIndex] = githubPost;
+                        }
+                    } else {
+                        // 로컬에 없으면 GitHub 데이터 추가
+                        mergedPosts.push(githubPost);
+                    }
+                });
+                
+                // 병합된 데이터 저장
+                if (mergedPosts.length !== localPosts.length || 
+                    JSON.stringify(mergedPosts) !== JSON.stringify(localPosts)) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedPosts));
+                    console.log('✅ GitHub에서 게시글 데이터를 동기화했습니다.');
+                    
+                    // 사이트맵 업데이트
+                    updateSitemap(mergedPosts);
+                    
+                    return true;
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('GitHub 동기화 실패 (정상일 수 있음):', error.message);
+    }
+    
+    return false;
+}
+
+// 페이지 로드 시 자동 동기화
+function autoSyncPosts() {
+    // 마지막 동기화 시간 확인 (5분마다 한 번만 동기화)
+    const lastSync = localStorage.getItem(SYNC_KEY);
+    const now = Date.now();
+    
+    if (!lastSync || (now - parseInt(lastSync)) > 5 * 60 * 1000) {
+        syncPostsFromGitHub().then(synced => {
+            if (synced) {
+                localStorage.setItem(SYNC_KEY, now.toString());
+                // 동기화 후 페이지 새로고침 (선택사항)
+                // window.location.reload();
+            }
+        });
+    }
+}
 
 function getAllPosts() {
     try {
@@ -36,9 +110,65 @@ function savePost(post) {
     
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+        
+        // 사이트맵 자동 업데이트
+        updateSitemap(posts);
     } catch (error) {
         console.error('Error saving post:', error);
         throw new Error('포스트 저장에 실패했습니다.');
+    }
+}
+
+// 사이트맵 생성 및 업데이트 함수
+function generateSitemap(posts) {
+    const baseUrl = 'https://freerahn.github.io/stock_blog';
+    const today = new Date().toISOString().split('T')[0];
+    
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    
+    // 홈페이지
+    xml += '  <url>\n';
+    xml += `    <loc>${baseUrl}/</loc>\n`;
+    xml += `    <lastmod>${today}</lastmod>\n`;
+    xml += '    <changefreq>daily</changefreq>\n';
+    xml += '    <priority>1.0</priority>\n';
+    xml += '  </url>\n';
+    
+    // 게시글 작성 페이지
+    xml += '  <url>\n';
+    xml += `    <loc>${baseUrl}/admin/write</loc>\n`;
+    xml += `    <lastmod>${today}</lastmod>\n`;
+    xml += '    <changefreq>monthly</changefreq>\n';
+    xml += '    <priority>0.5</priority>\n';
+    xml += '  </url>\n';
+    
+    // 각 게시글 추가
+    posts.forEach(post => {
+        const lastModified = post.updatedAt 
+            ? new Date(post.updatedAt).toISOString().split('T')[0]
+            : new Date(post.createdAt).toISOString().split('T')[0];
+        
+        xml += '  <url>\n';
+        xml += `    <loc>${baseUrl}/posts/${post.id}</loc>\n`;
+        xml += `    <lastmod>${lastModified}</lastmod>\n`;
+        xml += '    <changefreq>weekly</changefreq>\n';
+        xml += '    <priority>0.8</priority>\n';
+        xml += '  </url>\n';
+    });
+    
+    xml += '</urlset>';
+    
+    return xml;
+}
+
+function updateSitemap(posts) {
+    try {
+        const sitemapXml = generateSitemap(posts);
+        localStorage.setItem('stock_blog_sitemap', sitemapXml);
+        console.log('✅ 사이트맵이 자동으로 업데이트되었습니다.');
+    } catch (error) {
+        console.error('사이트맵 업데이트 실패:', error);
     }
 }
 
@@ -62,6 +192,10 @@ class Router {
 
     init() {
         window.addEventListener('hashchange', () => this.handleRoute());
+        
+        // 페이지 로드 시 GitHub에서 데이터 동기화
+        autoSyncPosts();
+        
         this.handleRoute();
     }
 
@@ -87,6 +221,11 @@ class Router {
 
     renderHome() {
         const posts = getLatestPosts(12);
+        const allPosts = getAllPosts();
+        
+        // 홈페이지 로드 시 사이트맵 업데이트
+        updateSitemap(allPosts);
+        
         const app = document.getElementById('app');
         
         app.innerHTML = `
@@ -116,6 +255,10 @@ class Router {
             window.location.hash = '#/';
             return;
         }
+        
+        // 게시글 조회 시 사이트맵도 업데이트 (수정된 경우)
+        const allPosts = getAllPosts();
+        updateSitemap(allPosts);
 
         // 조회수 기록
         if (window.statsTracker && window.statsTracker.recordView) {

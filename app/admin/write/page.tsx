@@ -40,7 +40,14 @@ export default function WritePage() {
       }
 
       const { savePost } = await import('@/lib/posts-client')
+      const { getAllPosts } = await import('@/lib/posts-client')
       savePost(newPost)
+      
+      // 사이트맵 자동 업데이트
+      const allPosts = getAllPosts()
+      const { updateSitemap } = await import('@/lib/sitemap-generator')
+      updateSitemap(allPosts)
+      
       router.push(`/posts/${newPost.id}`)
     } catch (error) {
       console.error('Error saving post:', error)

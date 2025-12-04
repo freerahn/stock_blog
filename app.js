@@ -6,10 +6,12 @@ const SYNC_KEY = 'stock_blog_last_sync';
 // GitHub에서 게시글 데이터 동기화
 async function syncPostsFromGitHub() {
     try {
-        const response = await fetch(GITHUB_POSTS_URL, {
-            cache: 'no-cache',
+        // 캐시 무시하고 항상 최신 데이터 가져오기
+        const response = await fetch(GITHUB_POSTS_URL + '?t=' + Date.now(), {
+            cache: 'no-store',
             headers: {
                 'Accept': 'application/json',
+                'Cache-Control': 'no-cache',
             }
         });
         
@@ -19,40 +21,43 @@ async function syncPostsFromGitHub() {
             if (Array.isArray(githubPosts) && githubPosts.length > 0) {
                 const localPosts = getAllPosts();
                 
-                // GitHub 데이터와 로컬 데이터 병합
-                const mergedPosts = [...localPosts];
-                githubPosts.forEach(githubPost => {
-                    const existingIndex = mergedPosts.findIndex(p => p.id === githubPost.id);
-                    if (existingIndex >= 0) {
-                        // 로컬에 있으면 더 최신 데이터 사용 (updatedAt 비교)
-                        const localPost = mergedPosts[existingIndex];
-                        const localDate = new Date(localPost.updatedAt || localPost.createdAt);
-                        const githubDate = new Date(githubPost.updatedAt || githubPost.createdAt);
-                        
-                        if (githubDate > localDate) {
-                            mergedPosts[existingIndex] = githubPost;
-                        }
+                // GitHub 데이터를 우선 사용 (다른 브라우저에서 작성한 글이 있으면 보이도록)
+                const mergedPosts = [...githubPosts];
+                
+                // 로컬에만 있는 최신 데이터가 있으면 추가 (병합)
+                localPosts.forEach(localPost => {
+                    const existingIndex = mergedPosts.findIndex(p => p.id === localPost.id);
+                    if (existingIndex < 0) {
+                        // GitHub에 없고 로컬에만 있으면 추가
+                        mergedPosts.push(localPost);
                     } else {
-                        // 로컬에 없으면 GitHub 데이터 추가
-                        mergedPosts.push(githubPost);
+                        // 둘 다 있으면 더 최신 데이터 사용
+                        const localDate = new Date(localPost.updatedAt || localPost.createdAt);
+                        const githubDate = new Date(mergedPosts[existingIndex].updatedAt || mergedPosts[existingIndex].createdAt);
+                        if (localDate > githubDate) {
+                            mergedPosts[existingIndex] = localPost;
+                        }
                     }
                 });
                 
                 // 병합된 데이터 저장
-                if (mergedPosts.length !== localPosts.length || 
-                    JSON.stringify(mergedPosts) !== JSON.stringify(localPosts)) {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedPosts));
-                    console.log('✅ GitHub에서 게시글 데이터를 동기화했습니다.');
-                    
-                    // 사이트맵 업데이트
-                    updateSitemap(mergedPosts);
-                    
-                    return true;
-                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedPosts));
+                localStorage.setItem(SYNC_KEY, Date.now().toString());
+                console.log(`✅ GitHub에서 ${githubPosts.length}개의 게시글을 동기화했습니다. (총 ${mergedPosts.length}개)`);
+                
+                // 사이트맵 업데이트
+                updateSitemap(mergedPosts);
+                
+                return true;
+            } else {
+                // GitHub에 데이터가 없으면 로컬 데이터만 사용
+                console.log('ℹ️ GitHub에 게시글이 없습니다. 로컬 데이터를 사용합니다.');
             }
+        } else {
+            console.warn('GitHub에서 데이터를 가져올 수 없습니다:', response.status);
         }
     } catch (error) {
-        console.warn('GitHub 동기화 실패 (정상일 수 있음):', error.message);
+        console.warn('GitHub 동기화 실패:', error.message);
     }
     
     return false;
@@ -113,10 +118,50 @@ function savePost(post) {
         
         // 사이트맵 자동 업데이트
         updateSitemap(posts);
+        
+        // GitHub에 자동 업로드 안내
+        uploadToGitHub(posts);
     } catch (error) {
         console.error('Error saving post:', error);
         throw new Error('포스트 저장에 실패했습니다.');
     }
+}
+
+// GitHub에 데이터 업로드 안내
+function uploadToGitHub(posts) {
+    const dataStr = JSON.stringify(posts, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'posts.json';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    
+    const shouldUpload = confirm(
+        '✅ 게시글이 저장되었습니다!\n\n' +
+        '다른 브라우저에서도 보려면 GitHub에 업로드해야 합니다.\n\n' +
+        '[확인] = posts.json 파일 다운로드 (GitHub의 public/posts.json에 업로드)\n' +
+        '[취소] = 나중에 관리자 페이지에서 백업'
+    );
+    
+    if (shouldUpload) {
+        link.click();
+        alert(
+            '📥 posts.json 파일이 다운로드되었습니다.\n\n' +
+            '다음 단계:\n' +
+            '1. GitHub 저장소로 이동: https://github.com/freerahn/stock_blog\n' +
+            '2. public/posts.json 파일 클릭\n' +
+            '3. 연필 아이콘(편집) 클릭\n' +
+            '4. 다운로드한 posts.json 내용을 붙여넣기\n' +
+            '5. "Commit changes" 클릭\n\n' +
+            '업로드 후 다른 브라우저에서 페이지를 새로고침하면 게시글이 보입니다!'
+        );
+    }
+    
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 // 사이트맵 생성 및 업데이트 함수
@@ -193,8 +238,21 @@ class Router {
     init() {
         window.addEventListener('hashchange', () => this.handleRoute());
         
-        // 페이지 로드 시 GitHub에서 데이터 동기화
-        autoSyncPosts();
+        // 페이지 로드 시 GitHub에서 데이터 동기화 (강제 실행)
+        syncPostsFromGitHub().then(synced => {
+            if (synced) {
+                // 동기화 성공 시 현재 페이지 새로고침
+                const currentHash = window.location.hash;
+                if (currentHash && currentHash.startsWith('#/posts/')) {
+                    // 게시글 페이지인 경우 다시 렌더링
+                    const postId = currentHash.split('/posts/')[1];
+                    this.renderPost(postId);
+                } else if (!currentHash || currentHash === '#/' || currentHash === '#') {
+                    // 홈페이지인 경우 다시 렌더링
+                    this.renderHome();
+                }
+            }
+        });
         
         this.handleRoute();
     }
@@ -801,3 +859,4 @@ class Router {
 
 // 라우터 초기화
 const router = new Router();
+window.router = router; // 전역으로 노출 (동기화 후 재렌더링용)

@@ -90,9 +90,15 @@ export function getAllPosts(): BlogPost[] {
   }
 }
 
-// 페이지 로드 시 자동 동기화 (Next.js용)
+// 페이지 로드 시 자동 동기화 (Next.js용) - 항상 실행
 if (typeof window !== 'undefined') {
+  // 즉시 실행
   syncPostsFromGitHub();
+  
+  // 1초 후에도 다시 실행 (GitHub 업로드 후 반영 시간 고려)
+  setTimeout(() => {
+    syncPostsFromGitHub();
+  }, 1000);
 }
 
 // ID로 포스트 가져오기
@@ -130,11 +136,51 @@ export function savePost(post: BlogPost): void {
       }).catch(error => {
         console.warn('사이트맵 업데이트 실패:', error);
       });
+      
+      // GitHub 업로드 안내
+      uploadToGitHubHelper(posts);
     }
   } catch (error) {
     console.error('Error saving post:', error);
     throw new Error('포스트 저장에 실패했습니다.');
   }
+}
+
+// GitHub 업로드 안내 (Next.js용)
+function uploadToGitHubHelper(posts: BlogPost[]) {
+  const dataStr = JSON.stringify(posts, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(dataBlob);
+  
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'posts.json';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  
+  const shouldUpload = confirm(
+    '✅ 게시글이 저장되었습니다!\n\n' +
+    '다른 브라우저에서도 보려면 GitHub에 업로드해야 합니다.\n\n' +
+    '[확인] = posts.json 파일 다운로드 (GitHub의 public/posts.json에 업로드)\n' +
+    '[취소] = 나중에 관리자 페이지에서 백업'
+  );
+  
+  if (shouldUpload) {
+    link.click();
+    alert(
+      '📥 posts.json 파일이 다운로드되었습니다.\n\n' +
+      '다음 단계:\n' +
+      '1. GitHub 저장소로 이동: https://github.com/freerahn/stock_blog\n' +
+      '2. public/posts.json 파일 클릭\n' +
+      '3. 연필 아이콘(편집) 클릭\n' +
+      '4. 다운로드한 posts.json 내용을 붙여넣기\n' +
+      '5. "Commit changes" 클릭\n\n' +
+      '업로드 후 다른 브라우저에서 페이지를 새로고침하면 게시글이 보입니다!'
+    );
+  }
+  
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 // 포스트 삭제

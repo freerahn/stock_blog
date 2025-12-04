@@ -22,13 +22,22 @@ export default function PostPage() {
   const [recentPosts, setRecentPosts] = useState<BlogPost[]>([])
 
   useEffect(() => {
-    const foundPost = getPostById(id)
-    if (!foundPost) {
-      router.push('/')
-      return
+    const loadPost = async () => {
+      // GitHub에서 동기화 먼저 실행
+      const { syncPostsFromGitHub } = await import('@/lib/posts-client')
+      await syncPostsFromGitHub()
+      
+      // 동기화 후 게시글 로드
+      const foundPost = getPostById(id)
+      if (!foundPost) {
+        router.push('/')
+        return
+      }
+      setPost(foundPost)
+      setRecentPosts(getLatestPosts(6))
     }
-    setPost(foundPost)
-    setRecentPosts(getLatestPosts(6))
+    
+    loadPost()
     
     // 조회수 기록
     if (typeof window !== 'undefined') {

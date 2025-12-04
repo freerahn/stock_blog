@@ -6,7 +6,7 @@ export default function Header() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="text-2xl font-bold text-primary-600">
-            주식 분석 블로그
+            investa의 투자 정보
           </Link>
           <nav className="flex items-center gap-6">
             <Link 

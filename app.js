@@ -93,7 +93,7 @@ class Router {
             ${this.renderHeader()}
             <div class="container mx-auto px-4 py-8">
                 <div class="mb-8">
-                    <h1 class="text-4xl font-bold text-gray-900 mb-4">주식 종목 분석 블로그</h1>
+                    <h1 class="text-4xl font-bold text-gray-900 mb-4">investa의 투자 정보</h1>
                     <p class="text-lg text-gray-600">전문적인 주식 종목 분석과 주가 전망을 제공합니다</p>
                 </div>
                 ${posts.length === 0 ? `
@@ -128,7 +128,7 @@ class Router {
             : post.excerpt;
 
         // 메타 태그 업데이트
-        document.title = `${post.title} | 주식 종목 분석 블로그`;
+        document.title = `${post.title} | investa의 투자 정보`;
         this.updateMetaTag('description', description);
         this.updateMetaTag('keywords', post.tags.join(', '));
         this.updateMetaTag('og:title', post.title, true);
@@ -254,7 +254,7 @@ class Router {
                     </div>
                     <div>
                         <label for="author" class="block text-sm font-medium text-gray-700 mb-2">작성자</label>
-                        <input type="text" id="author" value="관리자" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="작성자 이름">
+                        <input type="text" id="author" value="investa" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="작성자 이름">
                     </div>
                     <div class="flex gap-4">
                         <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">글 발행하기</button>
@@ -482,7 +482,7 @@ class Router {
             const textContent = tempDiv.textContent || tempDiv.innerText || '';
             const excerpt = document.getElementById('excerpt').value || textContent.substring(0, 200);
             
-            const author = document.getElementById('author').value || '관리자';
+            const author = document.getElementById('author').value || 'investa';
             const stockName = document.getElementById('stockName').value || undefined;
             const stockSymbol = document.getElementById('stockSymbol').value || undefined;
 
@@ -563,7 +563,7 @@ class Router {
             <header class="bg-white shadow-sm border-b">
                 <div class="container mx-auto px-4">
                     <div class="flex items-center justify-between h-16">
-                        <a href="#/" class="text-2xl font-bold text-blue-600">주식 분석 블로그</a>
+                        <a href="#/" class="text-2xl font-bold text-blue-600">investa의 투자 정보</a>
                         <nav class="flex items-center gap-6">
                             <a href="#/" class="text-gray-700 hover:text-blue-600 transition">홈</a>
                         </nav>
@@ -578,7 +578,7 @@ class Router {
             <footer class="bg-gray-900 text-white mt-16">
                 <div class="container mx-auto px-4 py-8">
                     <div class="text-center">
-                        <p class="text-gray-400">© 2024 주식 분석 블로그. All rights reserved.</p>
+                        <p class="text-gray-400">© 2024 investa의 투자 정보. All rights reserved.</p>
                     </div>
                 </div>
             </footer>

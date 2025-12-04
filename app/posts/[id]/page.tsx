@@ -72,7 +72,7 @@ export default function PostPage() {
     },
     publisher: {
       '@type': 'Organization',
-      name: '주식 종목 분석 블로그',
+      name: 'investa의 투자 정보',
     },
     keywords: post.tags.join(', '),
     articleSection: '주식 분석',
@@ -86,7 +86,7 @@ export default function PostPage() {
   }
 
   useEffect(() => {
-    document.title = `${post.title} | 주식 종목 분석 블로그`
+    document.title = `${post.title} | investa의 투자 정보`
     
     // 메타 태그 동적 업데이트
     const updateMetaTag = (name: string, content: string, isProperty = false) => {

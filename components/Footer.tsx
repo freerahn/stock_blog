@@ -4,7 +4,7 @@ export default function Footer() {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
           <p className="text-gray-400">
-            © 2024 주식 분석 블로그. All rights reserved.
+            © 2024 investa의 투자 정보. All rights reserved.
           </p>
         </div>
       </div>

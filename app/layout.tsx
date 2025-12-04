@@ -7,12 +7,12 @@ import Footer from '@/components/Footer'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: '주식 종목 분석 블로그 | 주가 전망 및 투자 정보',
+  title: 'investa의 투자 정보 | 주가 전망 및 투자 정보',
   description: '주식 종목 분석과 주가 전망을 제공하는 전문 블로그. 상세한 기업 분석, 투자 전략, 시장 동향을 확인하세요.',
   keywords: '주식, 종목 분석, 주가 전망, 투자, 증권, 주식 투자, 기업 분석',
   openGraph: {
-    title: '주식 종목 분석 블로그',
-    description: '주식 종목 분석과 주가 전망을 제공하는 전문 블로그',
+    title: 'investa의 투자 정보',
+    description: 'investa의 주식 종목 분석과 주가 전망을 제공하는 전문 블로그',
     type: 'website',
     locale: 'ko_KR',
   },

@@ -12,7 +12,7 @@ export default function WritePage() {
     excerpt: '',
     tags: [],
     images: [],
-    author: '관리자',
+    author: 'investa',
     stockSymbol: '',
     stockName: '',
   })
@@ -32,7 +32,7 @@ export default function WritePage() {
         excerpt: formData.excerpt || formData.content?.substring(0, 200) || '',
         tags: formData.tags || [],
         images: formData.images || [],
-        author: formData.author || '관리자',
+        author: formData.author || 'investa',
         stockSymbol: formData.stockSymbol || undefined,
         stockName: formData.stockName || undefined,
         createdAt: new Date().toISOString(),

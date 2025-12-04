@@ -907,25 +907,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         setupFirebaseRealtimeSync();
     }, 1000); // Firebase SDK 로드 대기
     
-    // Firebase에서 초기 데이터 로드
+    // Firebase에서 초기 데이터 로드 및 기존 글 동기화
     setTimeout(async () => {
         if (window.firebaseInitialized) {
             const firebasePosts = await getPostsFromFirebase();
+            const localPosts = getAllPosts();
+            
             if (firebasePosts.length > 0) {
-                const localPosts = getAllPosts();
+                // Firebase에 데이터가 있는 경우: 병합
                 const mergedPosts = [...firebasePosts];
                 
-                // 로컬에만 있는 최신 데이터 병합
+                // 로컬에만 있는 최신 데이터 병합 및 업로드
                 localPosts.forEach(localPost => {
                     const existingIndex = mergedPosts.findIndex(p => p.id === localPost.id);
                     if (existingIndex < 0) {
+                        // 로컬에만 있으면 Firebase에 업로드
                         mergedPosts.push(localPost);
+                        savePostToFirebase(localPost).then(() => {
+                            console.log('✅ 기존 글 Firebase 업로드 완료:', localPost.id);
+                        }).catch(err => {
+                            console.error('기존 글 Firebase 업로드 실패:', err);
+                        });
                     } else {
+                        // 둘 다 있으면 더 최신 데이터 사용 및 업로드
                         const localDate = new Date(localPost.updatedAt || localPost.createdAt);
                         const firebaseDate = new Date(mergedPosts[existingIndex].updatedAt || mergedPosts[existingIndex].createdAt);
                         if (localDate > firebaseDate) {
                             mergedPosts[existingIndex] = localPost;
-                            savePostToFirebase(localPost);
+                            savePostToFirebase(localPost).then(() => {
+                                console.log('✅ 기존 글 Firebase 업데이트 완료:', localPost.id);
+                            }).catch(err => {
+                                console.error('기존 글 Firebase 업데이트 실패:', err);
+                            });
                         }
                     }
                 });
@@ -937,6 +950,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (router.currentRoute) {
                     router.render();
                 }
+            } else if (localPosts.length > 0) {
+                // Firebase에 데이터가 없고 로컬에만 있는 경우: 모든 로컬 글을 Firebase에 업로드
+                await syncLocalPostsToFirebase();
             }
         }
     }, 2000);

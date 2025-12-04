@@ -6,6 +6,9 @@
     <title>관리자 페이지 - investa의 투자 정보</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Quill WYSIWYG Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <style>
         .active-tab {
             background-color: #3b82f6;
@@ -134,7 +137,7 @@
 
     <!-- 수정 모달 -->
     <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-4xl w-full mx-4 max-h-[95vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-6">
                 <h3 class="text-2xl font-bold text-gray-900">게시글 수정</h3>
                 <button 
@@ -145,49 +148,123 @@
                 </button>
             </div>
             
-            <form id="edit-form" onsubmit="saveEditedPost(event)" class="space-y-4">
+            <form id="edit-form" onsubmit="saveEditedPost(event)" class="space-y-6">
                 <input type="hidden" id="edit-post-id">
                 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">제목</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">제목 *</label>
                     <input 
                         type="text" 
                         id="edit-title" 
                         required
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="글 제목을 입력하세요"
                     >
                 </div>
                 
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">종목명</label>
+                        <input 
+                            type="text" 
+                            id="edit-stockName" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="예: 삼성전자"
+                        >
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">종목코드</label>
+                        <input 
+                            type="text" 
+                            id="edit-stockSymbol" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="예: 005930"
+                        >
+                    </div>
+                </div>
+                
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">요약</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">요약 (SEO용)</label>
                     <textarea 
                         id="edit-excerpt" 
                         rows="3"
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="글 요약을 입력하세요"
                     ></textarea>
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">본문</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">본문 *</label>
+                    <div id="edit-contentEditor" style="height: 400px;" class="mb-2"></div>
                     <textarea 
                         id="edit-content" 
-                        rows="10"
                         required
-                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                        class="hidden"
                     ></textarea>
+                    <p class="text-xs text-gray-500">서식, 링크, 이미지 등을 사용할 수 있습니다.</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">태그 (SEO용)</label>
+                    <div class="flex gap-2 mb-2">
+                        <input 
+                            type="text" 
+                            id="edit-tagInput" 
+                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="태그를 입력하고 Enter를 누르세요"
+                        >
+                        <button 
+                            type="button" 
+                            id="edit-addTagBtn"
+                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                        >
+                            추가
+                        </button>
+                    </div>
+                    <div id="edit-tagsContainer" class="flex flex-wrap gap-2"></div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">이미지 URL</label>
+                    <div class="flex gap-2 mb-2">
+                        <input 
+                            type="url" 
+                            id="edit-imageInput" 
+                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="이미지 URL을 입력하고 Enter를 누르세요"
+                        >
+                        <button 
+                            type="button" 
+                            id="edit-addImageBtn"
+                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                        >
+                            추가
+                        </button>
+                    </div>
+                    <div id="edit-imagesContainer" class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4"></div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">작성자</label>
+                    <input 
+                        type="text" 
+                        id="edit-author" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="작성자 이름"
+                    >
                 </div>
                 
                 <div class="flex gap-4">
                     <button 
                         type="submit"
-                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                     >
                         저장
                     </button>
                     <button 
                         type="button"
                         onclick="closeEditModal()"
-                        class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                        class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
                     >
                         취소
                     </button>
@@ -377,6 +454,11 @@
             }).join('');
         }
         
+        // 수정 모달 관련 변수
+        let editQuill = null;
+        let editTags = [];
+        let editImages = [];
+        
         // 게시글 수정
         function editPost(id) {
             const posts = getAllPosts();
@@ -387,20 +469,184 @@
                 return;
             }
             
+            // 기본 정보 설정
             document.getElementById('edit-post-id').value = post.id;
             document.getElementById('edit-title').value = post.title;
             document.getElementById('edit-excerpt').value = post.excerpt || '';
-            document.getElementById('edit-content').value = post.content;
+            document.getElementById('edit-stockName').value = post.stockName || '';
+            document.getElementById('edit-stockSymbol').value = post.stockSymbol || '';
+            document.getElementById('edit-author').value = post.author || 'investa';
             
+            // 태그 설정
+            editTags = [...(post.tags || [])];
+            renderEditTags();
+            
+            // 이미지 설정
+            editImages = [...(post.images || [])];
+            renderEditImages();
+            
+            // Quill 에디터 초기화
+            initEditQuill(post.content);
+            
+            // 모달 표시
             const modal = document.getElementById('edit-modal');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
+        }
+        
+        // Quill 에디터 초기화
+        function initEditQuill(initialContent) {
+            const contentEditor = document.getElementById('edit-contentEditor');
+            const contentTextarea = document.getElementById('edit-content');
+            
+            // 기존 에디터가 있으면 제거
+            if (editQuill) {
+                editQuill = null;
+            }
+            
+            // 에디터 컨테이너 초기화
+            contentEditor.innerHTML = '';
+            
+            // Quill 에디터 생성
+            if (typeof Quill !== 'undefined') {
+                editQuill = new Quill('#edit-contentEditor', {
+                    theme: 'snow',
+                    modules: {
+                        toolbar: {
+                            container: [
+                                [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                                ['bold', 'italic', 'underline', 'strike'],
+                                [{ 'color': [] }, { 'background': [] }],
+                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                [{ 'align': [] }],
+                                ['link', 'image'],
+                                ['blockquote', 'code-block'],
+                                ['clean']
+                            ],
+                            handlers: {
+                                'image': function() {
+                                    const input = document.createElement('input');
+                                    input.setAttribute('type', 'file');
+                                    input.setAttribute('accept', 'image/*');
+                                    input.click();
+                                    
+                                    input.onchange = () => {
+                                        const file = input.files[0];
+                                        if (file) {
+                                            if (file.size > 5 * 1024 * 1024) {
+                                                alert('이미지 크기는 5MB 이하여야 합니다.');
+                                                return;
+                                            }
+                                            
+                                            const reader = new FileReader();
+                                            reader.onload = (e) => {
+                                                const range = editQuill.getSelection(true);
+                                                editQuill.insertEmbed(range.index, 'image', e.target.result);
+                                                editQuill.setSelection(range.index + 1);
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                    };
+                                }
+                            }
+                        }
+                    },
+                    placeholder: '글 내용을 입력하세요...'
+                });
+                
+                // 초기 내용 설정
+                if (initialContent) {
+                    editQuill.root.innerHTML = initialContent;
+                    contentTextarea.value = initialContent;
+                }
+                
+                // 에디터 내용 변경 시 textarea에 저장
+                editQuill.on('text-change', () => {
+                    const html = editQuill.root.innerHTML;
+                    contentTextarea.value = html;
+                });
+            } else {
+                // Quill이 없으면 일반 textarea 사용
+                contentTextarea.classList.remove('hidden');
+                contentTextarea.rows = 20;
+                contentTextarea.value = initialContent || '';
+            }
+        }
+        
+        // 태그 렌더링
+        function renderEditTags() {
+            const container = document.getElementById('edit-tagsContainer');
+            container.innerHTML = editTags.map(tag => `
+                <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                    #${escapeHtml(tag)}
+                    <button type="button" onclick="removeEditTag('${escapeHtml(tag)}')" class="text-blue-700 hover:text-blue-900">×</button>
+                </span>
+            `).join('');
+        }
+        
+        // 태그 추가
+        function addEditTag() {
+            const tagInput = document.getElementById('edit-tagInput');
+            const tag = tagInput.value.trim();
+            
+            if (tag && !editTags.includes(tag)) {
+                editTags.push(tag);
+                tagInput.value = '';
+                renderEditTags();
+            }
+        }
+        
+        // 태그 제거
+        function removeEditTag(tag) {
+            editTags = editTags.filter(t => t !== tag);
+            renderEditTags();
+        }
+        
+        // 이미지 렌더링
+        function renderEditImages() {
+            const container = document.getElementById('edit-imagesContainer');
+            if (editImages.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            container.innerHTML = editImages.map((image, idx) => `
+                <div class="relative group">
+                    <img src="${escapeHtml(image)}" alt="이미지 ${idx + 1}" class="w-full h-32 object-cover rounded-lg border border-gray-300">
+                    <button type="button" onclick="removeEditImage('${escapeHtml(image)}')" class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">×</button>
+                </div>
+            `).join('');
+        }
+        
+        // 이미지 추가
+        function addEditImage() {
+            const imageInput = document.getElementById('edit-imageInput');
+            const imageUrl = imageInput.value.trim();
+            
+            if (imageUrl && !editImages.includes(imageUrl)) {
+                editImages.push(imageUrl);
+                imageInput.value = '';
+                renderEditImages();
+            }
+        }
+        
+        // 이미지 제거
+        function removeEditImage(image) {
+            editImages = editImages.filter(img => img !== image);
+            renderEditImages();
         }
         
         function closeEditModal() {
             const modal = document.getElementById('edit-modal');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+            
+            // 에디터 정리
+            if (editQuill) {
+                editQuill = null;
+            }
+            editTags = [];
+            editImages = [];
         }
         
         function saveEditedPost(event) {
@@ -409,7 +655,22 @@
             const id = document.getElementById('edit-post-id').value;
             const title = document.getElementById('edit-title').value;
             const excerpt = document.getElementById('edit-excerpt').value;
-            const content = document.getElementById('edit-content').value;
+            const stockName = document.getElementById('edit-stockName').value || undefined;
+            const stockSymbol = document.getElementById('edit-stockSymbol').value || undefined;
+            const author = document.getElementById('edit-author').value || 'investa';
+            
+            // Quill 에디터에서 내용 가져오기
+            let content = '';
+            if (editQuill) {
+                content = editQuill.root.innerHTML;
+            } else {
+                content = document.getElementById('edit-content').value;
+            }
+            
+            if (!content.trim()) {
+                alert('본문을 입력해주세요.');
+                return;
+            }
             
             const posts = getAllPosts();
             const post = posts.find(p => p.id === id);
@@ -419,9 +680,15 @@
                 return;
             }
             
+            // 게시글 업데이트
             post.title = title;
             post.excerpt = excerpt;
             post.content = content;
+            post.tags = [...editTags];
+            post.images = [...editImages];
+            post.stockName = stockName;
+            post.stockSymbol = stockSymbol;
+            post.author = author;
             post.updatedAt = new Date().toISOString();
             
             if (savePost(post)) {
@@ -614,6 +881,36 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadPosts();
             recordVisitor(); // 페이지 방문 기록
+            
+            // 수정 모달 태그 입력 이벤트
+            const editTagInput = document.getElementById('edit-tagInput');
+            const editAddTagBtn = document.getElementById('edit-addTagBtn');
+            if (editTagInput) {
+                editTagInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addEditTag();
+                    }
+                });
+            }
+            if (editAddTagBtn) {
+                editAddTagBtn.addEventListener('click', addEditTag);
+            }
+            
+            // 수정 모달 이미지 입력 이벤트
+            const editImageInput = document.getElementById('edit-imageInput');
+            const editAddImageBtn = document.getElementById('edit-addImageBtn');
+            if (editImageInput) {
+                editImageInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addEditImage();
+                    }
+                });
+            }
+            if (editAddImageBtn) {
+                editAddImageBtn.addEventListener('click', addEditImage);
+            }
         });
         
         // 모달 외부 클릭 시 닫기

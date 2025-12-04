@@ -31,7 +31,7 @@ export default function StockChart({ stockSymbol, stockName }: StockChartProps) 
       try {
         setLoading(true)
         setError(null)
-        const data = await getStockData(stockSymbol, '3y')
+        const data = await getStockData(stockSymbol, stockName, '3y')
         setAllStockData(data)
         setLoading(false)
       } catch (err) {
@@ -255,7 +255,7 @@ function filterDataByPeriod(data: StockDataPoint[], period: Period): StockDataPo
 }
 
 // 주가 데이터 가져오기 함수
-async function getStockData(stockSymbol: string, range: '3m' | '3y' = '3y'): Promise<StockDataPoint[]> {
+async function getStockData(stockSymbol: string, stockName: string, range: '3m' | '3y' = '3y'): Promise<StockDataPoint[]> {
   try {
     // 한국 주식은 6자리 종목 코드를 사용 (예: 005930.KS)
     // 종목 코드가 6자리 숫자인지 확인
@@ -269,16 +269,30 @@ async function getStockData(stockSymbol: string, range: '3m' | '3y' = '3y'): Pro
     const apiRange = range === '3y' ? '3y' : '3mo'
     const yahooSymbol = `${cleanSymbol}.KS`
     
+    // CORS 문제를 피하기 위해 직접 호출 시도
     const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=${apiRange}`
     
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    })
+    let response: Response | null = null
+    let lastError: Error | null = null
+    
+    try {
+      response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+        mode: 'cors',
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+    } catch (error) {
+      console.warn('Yahoo Finance API 호출 실패:', error)
+      lastError = error as Error
+    }
 
-    if (response.ok) {
+    if (response && response.ok) {
       const data = await response.json()
       const result = data.chart?.result?.[0]
 
@@ -309,8 +323,10 @@ async function getStockData(stockSymbol: string, range: '3m' | '3y' = '3y'): Pro
       
       // 데이터가 없거나 형식이 맞지 않는 경우
       console.warn('Yahoo Finance API 응답에 유효한 데이터가 없습니다:', result)
-    } else {
+    } else if (response) {
       console.warn('Yahoo Finance API 응답 오류:', response.status, response.statusText)
+    } else {
+      console.warn('Yahoo Finance API 호출 실패:', lastError?.message || 'Unknown error')
     }
   } catch (error) {
     console.error('Yahoo Finance API 호출 실패:', error)
@@ -318,12 +334,12 @@ async function getStockData(stockSymbol: string, range: '3m' | '3y' = '3y'): Pro
   }
 
   // API 실패 시 시뮬레이션 데이터 생성 (실제 주가와 유사하게)
-  return generateSimulatedStockData(stockSymbol, range)
+  return generateSimulatedStockData(stockSymbol, stockName, range)
 }
 
 // 시뮬레이션 주가 데이터 생성 (API 실패 시에만 사용)
-function generateSimulatedStockData(stockSymbol: string, range: '3m' | '3y' = '3y'): StockDataPoint[] {
-  console.warn(`⚠️ 실제 주가 데이터를 가져올 수 없어 시뮬레이션 데이터를 사용합니다. 종목: ${stockSymbol}`)
+function generateSimulatedStockData(stockSymbol: string, stockName: string, range: '3m' | '3y' = '3y'): StockDataPoint[] {
+  console.warn(`⚠️ 실제 주가 데이터를 가져올 수 없어 시뮬레이션 데이터를 사용합니다. 종목: ${stockSymbol} (${stockName || '알 수 없음'})`)
   
   const data: StockDataPoint[] = []
   const today = new Date()
@@ -337,6 +353,7 @@ function generateSimulatedStockData(stockSymbol: string, range: '3m' | '3y' = '3
 
   // 실제 한국 주식의 평균 주가 범위를 고려한 기본 주가 설정
   const basePrices: { [key: string]: number } = {
+    '068270': 4000, // 팬오션
     '079160': 6000, // CJ CGV
     '084990': 5000, // 헬릭스미스
     '035720': 4000, // 카티스

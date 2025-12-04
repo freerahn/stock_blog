@@ -11,7 +11,7 @@ function createStockChart(containerId, stockSymbol, stockName) {
     let chartInstance = null;
 
     // 주가 데이터 가져오기
-    getStockData(stockSymbol, '3y').then(data => {
+    getStockData(stockSymbol, stockName, '3y').then(data => {
         if (!data || data.length === 0) {
             container.innerHTML = '<div class="text-center py-8 text-gray-500">주가 데이터를 불러올 수 없습니다.</div>';
             return;
@@ -236,7 +236,7 @@ function filterDataByPeriod(data, period) {
 }
 
 // 주가 데이터 가져오기 함수
-async function getStockData(stockSymbol, range = '3y') {
+async function getStockData(stockSymbol, stockName, range = '3y') {
     try {
         // 한국 주식은 6자리 종목 코드를 사용 (예: 005930.KS)
         // 종목 코드가 6자리 숫자인지 확인
@@ -250,17 +250,30 @@ async function getStockData(stockSymbol, range = '3y') {
         const apiRange = range === '3y' ? '3y' : '3mo';
         const yahooSymbol = `${cleanSymbol}.KS`;
         
-        // CORS 프록시를 사용하거나 직접 호출
+        // CORS 문제를 피하기 위해 직접 호출 시도
         const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=${apiRange}`;
         
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-            },
-        });
+        let response = null;
+        let lastError = null;
         
-        if (response.ok) {
+        try {
+            response = await fetch(apiUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+                mode: 'cors',
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        } catch (error) {
+            console.warn('Yahoo Finance API 호출 실패:', error);
+            lastError = error;
+        }
+        
+        if (response && response.ok) {
             const data = await response.json();
             const result = data.chart?.result?.[0];
             
@@ -282,15 +295,19 @@ async function getStockData(stockSymbol, range = '3y') {
                     .filter(point => point !== null && point.price > 0);
                 
                 if (stockData.length > 0) {
-                    console.log(`주가 데이터 로드 성공: ${cleanSymbol}, ${stockData.length}개 데이터 포인트`);
+                    const latestPrice = stockData[stockData.length - 1].price;
+                    console.log(`✅ 주가 데이터 로드 성공: ${cleanSymbol} (${stockName || '알 수 없음'}), ${stockData.length}개 데이터 포인트, 최신 주가: ${latestPrice}원`);
                     return stockData;
                 }
             }
             
             // 데이터가 없거나 형식이 맞지 않는 경우
-            console.warn('Yahoo Finance API 응답에 유효한 데이터가 없습니다:', result);
+            console.warn('⚠️ Yahoo Finance API 응답에 유효한 데이터가 없습니다:', result);
+        } else if (response) {
+            console.warn('⚠️ Yahoo Finance API 응답 오류:', response.status, response.statusText);
         } else {
-            console.warn('Yahoo Finance API 응답 오류:', response.status, response.statusText);
+            console.warn('⚠️ Yahoo Finance API 호출 실패:', lastError?.message || 'Unknown error');
+            console.warn('⚠️ 시뮬레이션 데이터를 사용합니다. (팬오션의 경우 4,000원 기준)');
         }
     } catch (error) {
         console.error('Yahoo Finance API 호출 실패:', error);
@@ -298,12 +315,12 @@ async function getStockData(stockSymbol, range = '3y') {
     }
 
     // API 실패 시 시뮬레이션 데이터 생성 (실제 주가와 유사하게)
-    return generateSimulatedStockData(stockSymbol, range);
+    return generateSimulatedStockData(stockSymbol, stockName, range);
 }
 
 // 시뮬레이션 주가 데이터 생성 (API 실패 시에만 사용)
-function generateSimulatedStockData(stockSymbol, range = '3y') {
-    console.warn(`⚠️ 실제 주가 데이터를 가져올 수 없어 시뮬레이션 데이터를 사용합니다. 종목: ${stockSymbol}`);
+function generateSimulatedStockData(stockSymbol, stockName, range = '3y') {
+    console.warn(`⚠️ 실제 주가 데이터를 가져올 수 없어 시뮬레이션 데이터를 사용합니다. 종목: ${stockSymbol} (${stockName || '알 수 없음'})`);
     
     const data = [];
     const today = new Date();
@@ -318,6 +335,7 @@ function generateSimulatedStockData(stockSymbol, range = '3y') {
     // 실제 한국 주식의 평균 주가 범위를 고려한 기본 주가 설정
     // 종목 코드에 따른 기본 주가 설정 (실제 주가 범위 참고)
     const basePrices = {
+        '068270': 4000, // 팬오션
         '079160': 6000, // CJ CGV
         '084990': 5000, // 헬릭스미스
         '035720': 4000, // 카티스

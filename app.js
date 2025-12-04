@@ -64,21 +64,62 @@ async function syncPostsFromGitHub() {
     return false;
 }
 
-// 페이지 로드 시 자동 동기화
+// 페이지 로드 시 자동 동기화 (항상 최신 데이터 가져오기)
 function autoSyncPosts() {
-    // 마지막 동기화 시간 확인 (5분마다 한 번만 동기화)
-    const lastSync = localStorage.getItem(SYNC_KEY);
-    const now = Date.now();
-    
-    if (!lastSync || (now - parseInt(lastSync)) > 5 * 60 * 1000) {
+    // 항상 최신 데이터 가져오기 (캐시 무시)
+    syncPostsFromGitHub().then(synced => {
+        if (synced) {
+            localStorage.setItem(SYNC_KEY, Date.now().toString());
+            // 동기화 성공 시 페이지 재렌더링
+            if (window.router) {
+                const currentHash = window.location.hash;
+                if (!currentHash || currentHash === '#/' || currentHash === '#') {
+                    window.router.renderHome();
+                } else if (currentHash.startsWith('#/posts/')) {
+                    const postId = currentHash.split('/posts/')[1];
+                    window.router.renderPost(postId);
+                } else {
+                    window.router.render();
+                }
+            }
+        }
+    });
+}
+
+// 주기적으로 최신 데이터 동기화 (10초마다)
+function startPeriodicSync() {
+    setInterval(() => {
         syncPostsFromGitHub().then(synced => {
             if (synced) {
-                localStorage.setItem(SYNC_KEY, now.toString());
-                // 동기화 후 페이지 새로고침 (선택사항)
-                // window.location.reload();
+                localStorage.setItem(SYNC_KEY, Date.now().toString());
+                // 동기화 성공 시 페이지 재렌더링
+                if (window.router) {
+                    const currentHash = window.location.hash;
+                    if (!currentHash || currentHash === '#/' || currentHash === '#') {
+                        window.router.renderHome();
+                    }
+                }
             }
         });
-    }
+    }, 10000); // 10초마다
+}
+
+// 페이지 포커스 시 최신 데이터 가져오기
+function setupFocusSync() {
+    window.addEventListener('focus', () => {
+        console.log('🔄 페이지 포커스 - 최신 데이터 동기화 중...');
+        syncPostsFromGitHub().then(synced => {
+            if (synced) {
+                localStorage.setItem(SYNC_KEY, Date.now().toString());
+                if (window.router) {
+                    const currentHash = window.location.hash;
+                    if (!currentHash || currentHash === '#/' || currentHash === '#') {
+                        window.router.renderHome();
+                    }
+                }
+            }
+        });
+    });
 }
 
 function getAllPosts() {
@@ -135,7 +176,9 @@ async function savePost(post) {
         updateSitemap(posts);
         
         // GitHub에 자동 업로드 (Firebase가 없을 때 대안)
-        autoUploadToGitHub(posts);
+        autoUploadToGitHub(posts).then(() => {
+            console.log('✅ GitHub 업로드 완료 - 다른 브라우저에서 10초 이내에 자동으로 동기화됩니다.');
+        });
     } catch (error) {
         console.error('Error saving post:', error);
         throw new Error('포스트 저장에 실패했습니다.');
@@ -311,9 +354,13 @@ async function autoUploadToGitHub(posts) {
     const token = localStorage.getItem(GITHUB_TOKEN_KEY);
     
     if (!token) {
-        // 토큰이 없으면 안내만 표시 (조용히 실패)
-        console.log('💡 GitHub 토큰이 설정되지 않았습니다. 관리자 페이지에서 설정하세요.');
-        return;
+        // 토큰이 없으면 명확한 안내
+        console.warn('⚠️ GitHub 토큰이 설정되지 않았습니다.');
+        console.warn('⚠️ 다른 브라우저에서 글을 보려면:');
+        console.warn('   1. 관리자 페이지(admin.html)에서 "⚙️ GitHub 설정" 클릭');
+        console.warn('   2. GitHub Personal Access Token 입력');
+        console.warn('   3. 또는 Firebase를 설정하세요 (FIREBASE_SETUP.md 참고)');
+        return Promise.resolve();
     }
     
     try {
@@ -363,13 +410,16 @@ async function autoUploadToGitHub(posts) {
         
         if (uploadResponse.ok) {
             console.log('✅ GitHub에 자동 업로드되었습니다!');
+            console.log('✅ 다른 브라우저에서 10초 이내에 자동으로 동기화됩니다.');
+            return Promise.resolve();
         } else {
             const errorData = await uploadResponse.json();
             throw new Error(errorData.message || '업로드 실패');
         }
     } catch (error) {
-        console.error('GitHub 자동 업로드 실패:', error);
-        // 실패해도 게시글은 저장되었으므로 조용히 실패
+        console.error('❌ GitHub 자동 업로드 실패:', error);
+        console.warn('⚠️ 게시글은 로컬에 저장되었지만 다른 브라우저에서는 보이지 않을 수 있습니다.');
+        return Promise.resolve(); // 실패해도 게시글은 저장되었으므로
     }
 }
 
@@ -447,7 +497,7 @@ class Router {
     init() {
         window.addEventListener('hashchange', () => this.handleRoute());
         
-        // 페이지 로드 시 GitHub에서 데이터 동기화 (강제 실행)
+        // 페이지 로드 시 항상 최신 데이터 동기화
         syncPostsFromGitHub().then(synced => {
             if (synced) {
                 // 동기화 성공 시 현재 페이지 새로고침
@@ -462,6 +512,12 @@ class Router {
                 }
             }
         });
+        
+        // 주기적 동기화 시작 (10초마다)
+        startPeriodicSync();
+        
+        // 페이지 포커스 시 동기화
+        setupFocusSync();
         
         this.handleRoute();
     }

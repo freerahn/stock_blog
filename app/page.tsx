@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getLatestPosts } from '@/lib/posts-client'
+import { getLatestPosts, syncPostsFromGitHub } from '@/lib/posts-client'
 import PostCard from '@/components/PostCard'
 import Link from 'next/link'
 import { BlogPost } from '@/types/blog'
@@ -13,7 +13,6 @@ export default function Home() {
     // GitHub에서 자동 동기화 후 게시글 로드
     const loadPosts = async () => {
       // GitHub에서 동기화
-      const { syncPostsFromGitHub } = await import('@/lib/posts-client')
       await syncPostsFromGitHub()
       
       // 동기화 후 게시글 로드

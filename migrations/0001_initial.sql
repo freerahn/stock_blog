@@ -19,3 +19,6 @@ CREATE INDEX IF NOT EXISTS idx_author ON posts(author);
 CREATE INDEX IF NOT EXISTS idx_stock_symbol ON posts(stockSymbol);
 
 
+
+
+

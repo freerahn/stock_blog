@@ -14,6 +14,7 @@ import { BlogPost } from '@/types/blog'
 // 주의: localStorage는 서버에서 접근할 수 없으므로 클라이언트 사이드 렌더링을 사용합니다
 // 검색 엔진(구글 등)은 JavaScript를 실행하므로 동적으로 추가된 메타 태그와 구조화된 데이터를 인식할 수 있습니다
 
+
 export default function PostPage() {
   const params = useParams()
   const router = useRouter()

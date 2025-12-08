@@ -97,7 +97,7 @@ export default function StockChart({ stockSymbol, stockName }: StockChartProps) 
             intersect: false,
             callbacks: {
               label: function (context) {
-                return `주가: ${context.parsed.y.toLocaleString()}원`
+                return `주가: ${context.parsed.y?.toLocaleString() || 0}원`
               },
             },
           },

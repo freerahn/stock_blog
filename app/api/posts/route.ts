@@ -1,9 +1,8 @@
-// 이 파일은 더 이상 사용되지 않습니다.
-// 클라이언트 사이드에서 localStorage를 직접 사용합니다.
+// Next.js API route - 현재 사용하지 않음
+// Cloudflare Pages Functions (functions/api/posts.js)를 사용합니다
 
+import { NextResponse } from 'next/server'
 
-
-
-
-
-
+export async function GET() {
+  return NextResponse.json([])
+}

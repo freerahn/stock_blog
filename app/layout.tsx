@@ -1,10 +1,7 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'investa의 투자 정보 | 주가 전망 및 투자 정보',
@@ -39,7 +36,7 @@ export default function RootLayout({
       <head>
         <link rel="canonical" href="https://stock-blog.com" />
       </head>
-      <body className={inter.className}>
+      <body className="font-sans">
         <Header />
         <main className="min-h-screen">
           {children}

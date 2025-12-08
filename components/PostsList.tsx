@@ -10,26 +10,22 @@ export default function PostsList() {
   const [posts, setPosts] = useState<BlogPost[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!mounted || typeof window === 'undefined') return
-    
-    // GitHub에서 자동 동기화 후 게시글 로드
+    // 게시글 로드
     const loadPosts = async () => {
       try {
+        console.log('게시글 로딩 시작...')
         setLoading(true)
         setError(null)
-        
-        // GitHub에서 동기화
+
+        // posts.json에서 동기화
         await syncPostsFromGitHub()
-        
+
         // 동기화 후 게시글 로드
         const loadedPosts = await getLatestPosts(12)
+        console.log('로드된 게시글 수:', loadedPosts.length)
+        console.log('게시글 데이터:', loadedPosts)
         setPosts(loadedPosts || [])
       } catch (err) {
         console.error('Failed to load posts:', err)
@@ -38,17 +34,9 @@ export default function PostsList() {
         setLoading(false)
       }
     }
-    
-    loadPosts()
-  }, [mounted])
 
-  if (!mounted) {
-    return (
-      <div className="text-center py-16">
-        <p className="text-gray-500 text-lg">초기화 중...</p>
-      </div>
-    )
-  }
+    loadPosts()
+  }, [])
 
   if (loading) {
     return (
@@ -64,11 +52,7 @@ export default function PostsList() {
       <div className="text-center py-16">
         <p className="text-red-500 text-lg mb-4">{error}</p>
         <button
-          onClick={() => {
-            setError(null)
-            setLoading(true)
-            window.location.reload()
-          }}
+          onClick={() => window.location.reload()}
           className="inline-block bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition"
         >
           다시 시도
@@ -81,8 +65,8 @@ export default function PostsList() {
     return (
       <div className="text-center py-16">
         <p className="text-gray-500 text-lg mb-4">아직 작성된 글이 없습니다.</p>
-        <Link 
-          href="/admin/write" 
+        <Link
+          href="/admin/write"
           className="inline-block bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition"
         >
           첫 글 작성하기
@@ -99,5 +83,3 @@ export default function PostsList() {
     </div>
   )
 }
-
-

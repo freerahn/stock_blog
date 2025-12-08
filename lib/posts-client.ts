@@ -89,19 +89,23 @@ async function fetchPostsFromJSON(): Promise<BlogPost[]> {
   return []
 }
 
-// 데이터 동기화 - D1 API 우선, 실패 시 JSON 사용
+// 데이터 동기화 - JSON 우선 (개발), D1 fallback (프로덕션)
 export async function syncPostsFromGitHub(): Promise<void> {
   try {
-    // 먼저 D1 API 시도
-    let posts = await fetchPostsFromD1()
+    // 먼저 JSON 파일에서 가져오기 (개발 환경용)
+    let posts = await fetchPostsFromJSON()
 
-    // D1에 데이터가 없으면 JSON 파일 사용
+    // JSON에 데이터가 없으면 D1 API 시도 (프로덕션 환경용)
     if (posts.length === 0) {
-      posts = await fetchPostsFromJSON()
+      console.log('JSON에 데이터가 없습니다. D1 API를 시도합니다...')
+      posts = await fetchPostsFromD1()
     }
 
     if (posts.length > 0) {
       savePostsToStorage(posts)
+      console.log(`✅ ${posts.length}개의 게시글을 로드했습니다.`)
+    } else {
+      console.warn('⚠️ 게시글이 없습니다.')
     }
   } catch (error) {
     console.error('Failed to sync posts:', error)

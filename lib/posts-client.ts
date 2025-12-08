@@ -2,11 +2,12 @@ import { BlogPost } from '@/types/blog'
 
 const POSTS_STORAGE_KEY = 'blog_posts'
 const POSTS_JSON_PATH = '/posts.json'
+const D1_API_PATH = '/api/posts'
 
 // localStorage에서 게시글 가져오기
 function getPostsFromStorage(): BlogPost[] {
   if (typeof window === 'undefined') return []
-  
+
   try {
     const stored = localStorage.getItem(POSTS_STORAGE_KEY)
     if (stored) {
@@ -15,14 +16,14 @@ function getPostsFromStorage(): BlogPost[] {
   } catch (error) {
     console.error('Failed to load posts from localStorage:', error)
   }
-  
+
   return []
 }
 
 // localStorage에 게시글 저장하기
 function savePostsToStorage(posts: BlogPost[]): void {
   if (typeof window === 'undefined') return
-  
+
   try {
     localStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(posts))
   } catch (error) {
@@ -30,7 +31,46 @@ function savePostsToStorage(posts: BlogPost[]): void {
   }
 }
 
-// public/posts.json에서 게시글 가져오기
+// D1 API에서 게시글 가져오기 (Cloudflare Pages)
+async function fetchPostsFromD1(): Promise<BlogPost[]> {
+  try {
+    const response = await fetch(D1_API_PATH, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    })
+
+    if (response.ok) {
+      const posts = await response.json()
+      if (Array.isArray(posts) && posts.length > 0) {
+        // D1 데이터를 BlogPost 형식으로 변환
+        const formattedPosts = posts.map(post => ({
+          id: post.id?.toString() || '',
+          title: post.title || '',
+          content: post.content || '',
+          excerpt: post.excerpt || '',
+          tags: post.tags ? (typeof post.tags === 'string' ? JSON.parse(post.tags) : post.tags) : [],
+          images: post.images ? (typeof post.images === 'string' ? JSON.parse(post.images) : post.images) : [],
+          createdAt: post.created_at || post.createdAt || new Date().toISOString(),
+          updatedAt: post.updated_at || post.updatedAt || new Date().toISOString(),
+          author: post.author || 'Anonymous',
+          stockSymbol: post.stock_symbol || post.stockSymbol,
+          stockName: post.stock_name || post.stockName,
+        }))
+
+        savePostsToStorage(formattedPosts)
+        return formattedPosts
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch posts from D1:', error)
+  }
+
+  return []
+}
+
+// public/posts.json에서 게시글 가져오기 (fallback)
 async function fetchPostsFromJSON(): Promise<BlogPost[]> {
   try {
     const response = await fetch(POSTS_JSON_PATH)
@@ -45,14 +85,21 @@ async function fetchPostsFromJSON(): Promise<BlogPost[]> {
   } catch (error) {
     console.error('Failed to fetch posts from JSON:', error)
   }
-  
+
   return []
 }
 
-// GitHub에서 동기화 (현재는 public/posts.json 사용)
+// 데이터 동기화 - D1 API 우선, 실패 시 JSON 사용
 export async function syncPostsFromGitHub(): Promise<void> {
   try {
-    const posts = await fetchPostsFromJSON()
+    // 먼저 D1 API 시도
+    let posts = await fetchPostsFromD1()
+
+    // D1에 데이터가 없으면 JSON 파일 사용
+    if (posts.length === 0) {
+      posts = await fetchPostsFromJSON()
+    }
+
     if (posts.length > 0) {
       savePostsToStorage(posts)
     }

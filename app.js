@@ -2,7 +2,6 @@
 const STORAGE_KEY = 'stock_blog_posts';
 const GITHUB_POSTS_URL = 'https://raw.githubusercontent.com/freerahn/stock_blog/main/public/posts.json';
 const SYNC_KEY = 'stock_blog_last_sync';
-const FIREBASE_COLLECTION = 'posts';
 // Cloudflare D1 API 엔드포인트 (배포 후 실제 URL로 변경)
 const D1_API_URL = process.env.D1_API_URL || 'https://stock-blog-api.YOUR_SUBDOMAIN.workers.dev/api/posts';
 
@@ -223,23 +222,18 @@ async function savePost(post) {
         // localStorage에 저장 (즉시 반영)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
         
-        // Firebase에 저장 (실시간 동기화) - 우선 사용
-        if (window.firebaseInitialized && window.firebaseDb) {
-            try {
-                await savePostToFirebase(post);
-                console.log('✅ Firebase에 저장 완료 - 다른 브라우저에서 즉시 볼 수 있습니다!');
-            } catch (firebaseError) {
-                console.error('Firebase 저장 실패:', firebaseError);
-                // Firebase 실패해도 계속 진행
-            }
-        } else {
-            console.log('💡 Firebase가 설정되지 않았습니다. GitHub 동기화를 사용합니다.');
+        // Cloudflare D1에 저장 시도
+        try {
+            await savePostToD1(post);
+            console.log('✅ D1에 저장 완료');
+        } catch (d1Error) {
+            console.warn('D1 저장 실패, localStorage만 사용:', d1Error);
         }
         
         // 사이트맵 자동 업데이트
         updateSitemap(posts);
         
-        // GitHub에 자동 업로드 (Firebase가 없을 때 대안)
+        // GitHub에 자동 업로드
         autoUploadToGitHub(posts).then(() => {
             console.log('✅ GitHub 업로드 완료 - 다른 브라우저에서 10초 이내에 자동으로 동기화됩니다.');
         });
@@ -249,163 +243,40 @@ async function savePost(post) {
     }
 }
 
-// Firebase에 포스트 저장
-async function savePostToFirebase(post) {
-    if (!window.firebaseInitialized || !window.firebaseDb) {
-        console.log('💡 Firebase가 설정되지 않았습니다. localStorage만 사용합니다.');
-        return;
-    }
-    
+// Cloudflare D1에 포스트 저장
+async function savePostToD1(post) {
     try {
-        const { doc, setDoc } = window.firebaseFunctions;
-        const postRef = doc(window.firebaseDb, FIREBASE_COLLECTION, post.id);
-        await setDoc(postRef, post, { merge: true });
-        console.log('✅ Firebase에 저장되었습니다:', post.id);
+        const response = await fetch(D1_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(post),
+        });
+        
+        if (response.ok) {
+            console.log('✅ D1에 저장되었습니다:', post.id);
+        } else {
+            throw new Error(`D1 저장 실패: ${response.status}`);
+        }
     } catch (error) {
-        console.error('Firebase 저장 실패:', error);
+        console.error('D1 저장 실패:', error);
         throw error;
     }
 }
 
-// Firebase에서 포스트 삭제
-async function deletePostFromFirebase(postId) {
-    if (!window.firebaseInitialized || !window.firebaseDb) {
-        return;
-    }
-    
+// Cloudflare D1에서 포스트 삭제
+async function deletePostFromD1(postId) {
     try {
-        const { doc, deleteDoc } = window.firebaseFunctions;
-        const postRef = doc(window.firebaseDb, FIREBASE_COLLECTION, postId);
-        await deleteDoc(postRef);
-        console.log('✅ Firebase에서 삭제되었습니다:', postId);
-    } catch (error) {
-        console.error('Firebase 삭제 실패:', error);
-    }
-}
-
-// Firebase에서 모든 포스트 가져오기
-async function getPostsFromFirebase() {
-    if (!window.firebaseInitialized || !window.firebaseDb) {
-        return [];
-    }
-    
-    try {
-        const { collection, getDocs } = window.firebaseFunctions;
-        const postsRef = collection(window.firebaseDb, FIREBASE_COLLECTION);
-        const snapshot = await getDocs(postsRef);
-        const posts = [];
-        snapshot.forEach((doc) => {
-            posts.push(doc.data());
+        const response = await fetch(`${D1_API_URL}/${postId}`, {
+            method: 'DELETE',
         });
-        return posts;
-    } catch (error) {
-        console.error('Firebase 조회 실패:', error);
-        return [];
-    }
-}
-
-// 기존 로컬 글들을 Firebase로 업로드
-async function syncLocalPostsToFirebase() {
-    if (!window.firebaseInitialized || !window.firebaseDb) {
-        console.log('💡 Firebase가 설정되지 않았습니다.');
-        return;
-    }
-    
-    const localPosts = getAllPosts();
-    if (localPosts.length === 0) {
-        console.log('📝 업로드할 로컬 글이 없습니다.');
-        return;
-    }
-    
-    const firebasePosts = await getPostsFromFirebase();
-    const firebasePostIds = new Set(firebasePosts.map(p => p.id));
-    
-    // Firebase에 없는 로컬 글들만 업로드
-    const postsToUpload = localPosts.filter(post => !firebasePostIds.has(post.id));
-    
-    if (postsToUpload.length === 0) {
-        console.log('✅ 모든 로컬 글이 이미 Firebase에 있습니다.');
-        return;
-    }
-    
-    console.log(`📤 ${postsToUpload.length}개의 기존 글을 Firebase에 업로드하는 중...`);
-    
-    let successCount = 0;
-    for (const post of postsToUpload) {
-        try {
-            await savePostToFirebase(post);
-            successCount++;
-            console.log(`✅ [${successCount}/${postsToUpload.length}] 업로드 완료: ${post.title}`);
-        } catch (error) {
-            console.error(`❌ 업로드 실패: ${post.title}`, error);
+        
+        if (response.ok) {
+            console.log('✅ D1에서 삭제되었습니다:', postId);
         }
-    }
-    
-    console.log(`✅ 기존 글 Firebase 업로드 완료: ${successCount}/${postsToUpload.length}개`);
-}
-
-// Firebase 실시간 동기화 설정
-function setupFirebaseRealtimeSync() {
-    if (!window.firebaseInitialized || !window.firebaseDb) {
-        console.log('💡 Firebase가 설정되지 않았습니다. 실시간 동기화를 사용할 수 없습니다.');
-        return;
-    }
-    
-    try {
-        const { collection, onSnapshot } = window.firebaseFunctions;
-        const postsRef = collection(window.firebaseDb, FIREBASE_COLLECTION);
-        
-        // 실시간 리스너 설정
-        const unsubscribe = onSnapshot(postsRef, (snapshot) => {
-            const posts = [];
-            snapshot.forEach((doc) => {
-                posts.push(doc.data());
-            });
-            
-            // Firebase 데이터를 localStorage에 동기화
-            const currentPosts = getAllPostsSync();
-            const mergedPosts = [...posts];
-            
-            // 로컬에만 있는 최신 데이터 병합
-            currentPosts.forEach(localPost => {
-                const existingIndex = mergedPosts.findIndex(p => p.id === localPost.id);
-                if (existingIndex < 0) {
-                    mergedPosts.push(localPost);
-                } else {
-                    const localDate = new Date(localPost.updatedAt || localPost.createdAt);
-                    const firebaseDate = new Date(mergedPosts[existingIndex].updatedAt || mergedPosts[existingIndex].createdAt);
-                    if (localDate > firebaseDate) {
-                        mergedPosts[existingIndex] = localPost;
-                    }
-                }
-            });
-            
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedPosts));
-            localStorage.setItem(SYNC_KEY, Date.now().toString());
-            
-            console.log('🔄 Firebase 실시간 동기화:', mergedPosts.length, '개 게시글');
-            
-            // 페이지 재렌더링 (데이터 변경 반영)
-            if (window.router) {
-                const currentHash = window.location.hash;
-                if (currentHash && currentHash.startsWith('#/posts/')) {
-                    const postId = currentHash.split('/posts/')[1];
-                    window.router.renderPost(postId);
-                } else if (!currentHash || currentHash === '#/' || currentHash === '#') {
-                    window.router.renderHome();
-                } else {
-                    window.router.render();
-                }
-            }
-        }, (error) => {
-            console.error('❌ Firebase 실시간 동기화 오류:', error);
-        });
-        
-        // 전역에 저장하여 나중에 해제할 수 있도록
-        window.firebaseUnsubscribe = unsubscribe;
-        console.log('✅ Firebase 실시간 동기화 시작 - 글을 쓰면 즉시 다른 브라우저에서 볼 수 있습니다!');
     } catch (error) {
-        console.error('❌ Firebase 실시간 동기화 설정 실패:', error);
+        console.error('D1 삭제 실패:', error);
     }
 }
 
@@ -423,7 +294,7 @@ async function autoUploadToGitHub(posts) {
         console.warn('⚠️ 다른 브라우저에서 글을 보려면:');
         console.warn('   1. 관리자 페이지(admin.html)에서 "⚙️ GitHub 설정" 클릭');
         console.warn('   2. GitHub Personal Access Token 입력');
-        console.warn('   3. 또는 Firebase를 설정하세요 (FIREBASE_SETUP.md 참고)');
+        console.warn('   3. Cloudflare D1을 설정하세요 (CLOUDFLARE_D1_SETUP.md 참고)');
         return Promise.resolve();
     }
     
@@ -636,7 +507,7 @@ class Router {
         `;
     }
 
-    renderPost(postId) {
+    async renderPost(postId) {
         const post = getPostById(postId);
         if (!post) {
             window.location.hash = '#/';
@@ -1190,70 +1061,58 @@ class Router {
 const router = new Router();
 window.router = router; // 전역으로 노출 (동기화 후 재렌더링용)
 
-// 페이지 로드 시 Firebase 초기화 및 동기화
+// 페이지 로드 시 D1 동기화
 document.addEventListener('DOMContentLoaded', async () => {
-    // Firebase 실시간 동기화 설정 (1초 후)
-    setTimeout(() => {
-        if (window.firebaseInitialized) {
-            setupFirebaseRealtimeSync();
-        } else {
-            console.log('💡 Firebase가 설정되지 않았습니다. GitHub 동기화를 사용합니다.');
-        }
-    }, 1000);
-    
-    // Firebase에서 초기 데이터 로드 및 기존 글 동기화 (2초 후)
+    // D1에서 초기 데이터 로드 (1초 후)
     setTimeout(async () => {
-        if (window.firebaseInitialized && window.firebaseDb) {
-            try {
-                const firebasePosts = await getPostsFromFirebase();
-                const localPosts = getAllPosts();
+        try {
+            const d1Posts = await getAllPosts();
+            const localPosts = getAllPostsSync();
+            
+            if (d1Posts.length > 0) {
+                // D1에 데이터가 있는 경우: 병합
+                const mergedPosts = [...d1Posts];
                 
-                if (firebasePosts.length > 0) {
-                    // Firebase에 데이터가 있는 경우: 병합
-                    const mergedPosts = [...firebasePosts];
-                    
-                    // 로컬에만 있는 최신 데이터 병합 및 업로드
-                    for (const localPost of localPosts) {
-                        const existingIndex = mergedPosts.findIndex(p => p.id === localPost.id);
-                        if (existingIndex < 0) {
-                            // 로컬에만 있으면 Firebase에 업로드
-                            mergedPosts.push(localPost);
-                            try {
-                                await savePostToFirebase(localPost);
-                                console.log('✅ 기존 글 Firebase 업로드 완료:', localPost.id);
-                            } catch (err) {
-                                console.error('기존 글 Firebase 업로드 실패:', err);
-                            }
-                        } else {
-                            // 둘 다 있으면 더 최신 데이터 사용 및 업로드
-                            const localDate = new Date(localPost.updatedAt || localPost.createdAt);
-                            const firebaseDate = new Date(mergedPosts[existingIndex].updatedAt || mergedPosts[existingIndex].createdAt);
-                            if (localDate > firebaseDate) {
-                                mergedPosts[existingIndex] = localPost;
-                                try {
-                                    await savePostToFirebase(localPost);
-                                    console.log('✅ 기존 글 Firebase 업데이트 완료:', localPost.id);
-                                } catch (err) {
-                                    console.error('기존 글 Firebase 업데이트 실패:', err);
-                                }
-                            }
+                // 로컬에만 있는 최신 데이터 병합 및 업로드
+                for (const localPost of localPosts) {
+                    const existingIndex = mergedPosts.findIndex(p => p.id === localPost.id);
+                    if (existingIndex < 0) {
+                        // 로컬에만 있으면 D1에 업로드
+                        mergedPosts.push(localPost);
+                        savePostToD1(localPost).catch(err => {
+                            console.error('기존 글 D1 업로드 실패:', err);
+                        });
+                    } else {
+                        // 둘 다 있으면 더 최신 데이터 사용 및 업로드
+                        const localDate = new Date(localPost.updatedAt || localPost.createdAt);
+                        const d1Date = new Date(mergedPosts[existingIndex].updatedAt || mergedPosts[existingIndex].createdAt);
+                        if (localDate > d1Date) {
+                            mergedPosts[existingIndex] = localPost;
+                            savePostToD1(localPost).catch(err => {
+                                console.error('기존 글 D1 업데이트 실패:', err);
+                            });
                         }
                     }
-                    
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedPosts));
-                    console.log('✅ Firebase에서 초기 데이터 로드 완료:', mergedPosts.length, '개');
-                    
-                    // 페이지 재렌더링
-                    if (router.currentRoute) {
-                        router.render();
-                    }
-                } else if (localPosts.length > 0) {
-                    // Firebase에 데이터가 없고 로컬에만 있는 경우: 모든 로컬 글을 Firebase에 업로드
-                    await syncLocalPostsToFirebase();
                 }
-            } catch (error) {
-                console.error('❌ Firebase 초기화 중 오류:', error);
+                
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedPosts));
+                console.log('✅ D1에서 초기 데이터 로드 완료:', mergedPosts.length, '개');
+                
+                // 페이지 재렌더링
+                if (router.currentRoute) {
+                    router.render();
+                }
+            } else if (localPosts.length > 0) {
+                // D1에 데이터가 없고 로컬에만 있는 경우: 모든 로컬 글을 D1에 업로드
+                console.log('📤 로컬 글을 D1에 업로드하는 중...');
+                for (const post of localPosts) {
+                    savePostToD1(post).catch(err => {
+                        console.error('D1 업로드 실패:', err);
+                    });
+                }
             }
+        } catch (error) {
+            console.error('❌ D1 초기화 중 오류:', error);
         }
-    }, 2000);
+    }, 1000);
 });

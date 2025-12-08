@@ -41,6 +41,16 @@ next-env.d.ts
 # data
 /data/posts.json
 
+# legacy files (Next.js에서 사용하지 않음)
+*.html
+*.bat
+*.sql
+sitemap.xml
+
+# large files
+*.log
+*.cache
+
 
 
 

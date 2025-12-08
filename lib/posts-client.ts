@@ -72,8 +72,21 @@ export async function getLatestPosts(limit: number = 10): Promise<BlogPost[]> {
   }
   
   // 날짜순으로 정렬하고 limit만큼 반환
+  if (posts.length === 0) {
+    return []
+  }
+  
   return posts
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .filter(post => post && post.createdAt) // 유효한 게시글만 필터링
+    .sort((a, b) => {
+      try {
+        const dateA = new Date(a.createdAt).getTime()
+        const dateB = new Date(b.createdAt).getTime()
+        return dateB - dateA
+      } catch {
+        return 0
+      }
+    })
     .slice(0, limit)
 }
 

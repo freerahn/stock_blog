@@ -22,3 +22,4 @@ CREATE INDEX IF NOT EXISTS idx_stock_symbol ON posts(stockSymbol);
 
 
 
+

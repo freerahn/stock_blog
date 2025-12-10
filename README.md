@@ -50,25 +50,44 @@ git push -u origin main
 1. Cloudflare Dashboard에서 Pages 프로젝트 생성
 2. GitHub 저장소 연결
 3. 빌드 설정:
-   - Build command: `npm run build`
-   - Build output directory: `.next`
+   - Build command: `CF_PAGES=1 npm run build`
+   - Build output directory: `out`
    - Node version: 18 이상
+   - Environment variables: `GITHUB_TOKEN` 추가 (GitHub Personal Access Token)
+4. Functions 설정:
+   - `functions/api/posts.ts` 파일이 자동으로 인식됩니다
+   - `/api/posts` 경로로 API가 자동 라우팅됩니다
 
-**중요**: Cloudflare Pages는 정적 사이트 호스팅만 지원하므로, API routes (`/api/posts`)는 개발 환경에서만 작동합니다. 프로덕션 환경에서도 웹에서 글을 작성하려면 다음 중 하나를 선택해야 합니다:
+## 환경변수 설정
 
-1. **로컬 개발 환경 사용** (권장): 로컬에서 `npm run dev`로 개발 서버를 실행하고, 글을 작성한 후 Git으로 푸시
-2. **Cloudflare Workers Functions**: API routes를 Cloudflare Workers Functions로 마이그레이션 (functions 디렉토리 사용)
-3. **GitHub API 통합**: 클라이언트에서 GitHub API를 사용하여 직접 파일 수정 (인증 필요)
+프로덕션 환경에서 웹에서 글을 작성/수정/삭제하려면 GitHub Personal Access Token이 필요합니다.
 
-현재 구조는 로컬 개발 환경에서 완전히 작동하며, 글 작성/수정/삭제가 모두 가능합니다.
+### GitHub Personal Access Token 생성
 
-**중요**: Cloudflare Pages는 정적 사이트 호스팅만 지원하므로, API routes (`/api/posts`)는 개발 환경에서만 작동합니다. 프로덕션 환경에서는 다음 중 하나를 선택해야 합니다:
+1. GitHub > Settings > Developer settings > Personal access tokens > Tokens (classic)
+2. "Generate new token" 클릭
+3. 권한 선택: `repo` (전체 저장소 액세스)
+4. 토큰 생성 후 복사
 
-1. **Cloudflare Workers Functions 사용**: API routes를 Cloudflare Workers Functions로 마이그레이션
-2. **GitHub API 사용**: 클라이언트에서 GitHub API를 사용하여 직접 파일 수정 (인증 필요)
-3. **로컬에서만 글 작성**: 로컬에서 글을 작성한 후 Git으로 푸시
+### 환경변수 설정
 
-현재 구조는 로컬 개발 환경에서 완전히 작동합니다.
+**개발 환경**:
+`.env.local` 파일 생성:
+```
+GITHUB_TOKEN=your_github_token_here
+```
+
+**Cloudflare Pages**:
+1. Cloudflare Dashboard > Pages > 프로젝트 선택
+2. Settings > Environment variables
+3. `GITHUB_TOKEN` 추가
+
+## 작동 방식
+
+- **개발 환경**: 로컬 파일 시스템을 사용하여 즉시 저장
+- **프로덕션 환경**: GitHub API를 통해 저장소에 직접 파일 생성/수정/삭제
+  - 글 작성/수정/삭제 시 GitHub 저장소에 자동으로 커밋됩니다
+  - 변경사항이 반영되는데 약간의 시간이 걸릴 수 있습니다
 
 ## 디렉토리 구조
 
@@ -76,6 +95,9 @@ git push -u origin main
 stock_blog/
 ├── content/
 │   └── posts/          # 게시글 마크다운 파일 저장 (Git에 포함)
+├── functions/
+│   └── api/
+│       └── posts.ts    # Cloudflare Pages Functions (프로덕션 API)
 ├── pages/
 │   ├── index.tsx       # 메인 페이지 (게시글 목록)
 │   ├── posts/
@@ -83,9 +105,10 @@ stock_blog/
 │   ├── admin/
 │   │   └── index.tsx   # 관리자 페이지
 │   └── api/
-│       └── posts.ts    # 게시글 API
+│       └── posts.ts    # Next.js API Routes (개발 환경)
 ├── lib/
-│   └── utils.ts        # 마크다운 파일 유틸리티
+│   ├── utils.ts        # 마크다운 파일 유틸리티
+│   └── github.ts       # GitHub API 유틸리티
 └── styles/
     └── globals.css     # 전역 스타일
 ```

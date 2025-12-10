@@ -25,6 +25,7 @@ export default function Admin() {
   const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [editorRef, setEditorRef] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadPosts();
@@ -32,7 +33,12 @@ export default function Admin() {
 
   const loadPosts = async () => {
     try {
-      const response = await fetch('/api/posts');
+      // Cloudflare Pages Functions 또는 Next.js API routes
+      const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
+        ? '/api/posts' // Cloudflare Pages Functions는 자동으로 /api/posts로 라우팅
+        : '/api/posts';
+      
+      const response = await fetch(apiUrl);
       const data = await response.json();
       setPosts(data.posts || []);
     } catch (error) {
@@ -60,28 +66,40 @@ export default function Admin() {
     }
   };
 
-  const handleDeletePost = async (slug: string) => {
+  const handleDeletePost = async (slug: string, title: string) => {
     if (!confirm('정말 이 게시글을 삭제하시겠습니까?')) {
       return;
     }
 
+    setLoading(true);
     try {
-      const response = await fetch('/api/posts', {
+      const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
+        ? '/api/posts'
+        : '/api/posts';
+        
+      const response = await fetch(apiUrl, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ slug }),
+        body: JSON.stringify({ slug, title }),
       });
 
       if (response.ok) {
-        loadPosts();
+        setTimeout(() => {
+          loadPosts();
+          setLoading(false);
+        }, 1000);
+        alert('게시글이 삭제되었습니다. GitHub에 반영되는데 시간이 걸릴 수 있습니다.');
       } else {
-        alert('게시글 삭제에 실패했습니다.');
+        const data = await response.json();
+        alert(data.error || '게시글 삭제에 실패했습니다.');
+        setLoading(false);
       }
     } catch (error) {
       console.error('게시글 삭제 실패:', error);
       alert('게시글 삭제에 실패했습니다.');
+      setLoading(false);
     }
   };
 
@@ -97,7 +115,12 @@ export default function Admin() {
       return;
     }
 
+    setLoading(true);
     try {
+      const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
+        ? '/api/posts'
+        : '/api/posts';
+        
       const method = editingPost ? 'PUT' : 'POST';
       const body = editingPost
         ? {
@@ -112,7 +135,7 @@ export default function Admin() {
             excerpt,
           };
 
-      const response = await fetch('/api/posts', {
+      const response = await fetch(apiUrl, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -121,19 +144,26 @@ export default function Admin() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setShowEditor(false);
         setEditingPost(null);
         setTitle('');
         setExcerpt('');
-        loadPosts();
-        alert(editingPost ? '게시글이 수정되었습니다.' : '게시글이 작성되었습니다.');
+        // GitHub API를 사용하는 경우 약간의 지연 후 로드
+        setTimeout(() => {
+          loadPosts();
+          setLoading(false);
+        }, editingPost ? 1000 : 2000);
+        alert(editingPost ? '게시글이 수정되었습니다. GitHub에 반영되는데 시간이 걸릴 수 있습니다.' : '게시글이 작성되었습니다. GitHub에 반영되는데 시간이 걸릴 수 있습니다.');
       } else {
         const data = await response.json();
         alert(data.error || '게시글 저장에 실패했습니다.');
+        setLoading(false);
       }
     } catch (error) {
       console.error('게시글 저장 실패:', error);
       alert('게시글 저장에 실패했습니다.');
+      setLoading(false);
     }
   };
 
@@ -168,7 +198,11 @@ export default function Admin() {
         <div className="admin-header">
           <h1 className="admin-title">게시글 관리</h1>
           {!showEditor && (
-            <button className="btn btn-primary" onClick={handleNewPost}>
+            <button 
+              className="btn btn-primary" 
+              onClick={handleNewPost}
+              disabled={loading}
+            >
               새 글 작성
             </button>
           )}
@@ -184,6 +218,7 @@ export default function Admin() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="게시글 제목을 입력하세요"
+                disabled={loading}
               />
             </div>
 
@@ -195,6 +230,7 @@ export default function Admin() {
                 value={excerpt}
                 onChange={(e) => setExcerpt(e.target.value)}
                 placeholder="게시글 요약을 입력하세요"
+                disabled={loading}
               />
             </div>
 
@@ -212,11 +248,19 @@ export default function Admin() {
             </div>
 
             <div className="form-actions">
-              <button className="btn btn-secondary" onClick={handleCancel}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleCancel}
+                disabled={loading}
+              >
                 취소
               </button>
-              <button className="btn btn-primary" onClick={handleSavePost}>
-                {editingPost ? '수정' : '저장'}
+              <button 
+                className="btn btn-primary" 
+                onClick={handleSavePost}
+                disabled={loading}
+              >
+                {loading ? '처리 중...' : editingPost ? '수정' : '저장'}
               </button>
             </div>
           </div>
@@ -241,12 +285,14 @@ export default function Admin() {
                     <button
                       className="btn btn-secondary btn-small"
                       onClick={() => handleEditPost(post)}
+                      disabled={loading}
                     >
                       수정
                     </button>
                     <button
                       className="btn btn-danger btn-small"
-                      onClick={() => handleDeletePost(post.slug)}
+                      onClick={() => handleDeletePost(post.slug, post.metaData.title)}
+                      disabled={loading}
                     >
                       삭제
                     </button>
@@ -260,4 +306,3 @@ export default function Admin() {
     </>
   );
 }
-

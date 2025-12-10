@@ -397,39 +397,29 @@ export default function Admin() {
                   onChange={() => {
                     // 에디터 내용 변경 시 state 업데이트
                     try {
-                      // DOM에서 에디터 찾기
-                      const editorEl = document.querySelector('.toastui-editor');
-                      if (editorEl) {
-                        // Toast UI Editor는 DOM에 인스턴스를 저장할 수 있음
-                        const instance = (editorEl as any).__editorInstance || 
-                                       (editorEl as any).editorInstance ||
-                                       (window as any).toastui?.Editor?.getInstances?.()?.[0];
-                        
-                        if (instance) {
-                          if (typeof instance.getMarkdown === 'function') {
-                            const markdown = instance.getMarkdown() || '';
-                            setEditorContent(markdown);
-                          } else if (typeof instance.getHTML === 'function') {
-                            const html = instance.getHTML() || '';
-                            setEditorContent(html);
+                      // DOM에서 직접 HTML 가져오기 (가장 확실한 방법)
+                      const wysiwygContent = document.querySelector('.toastui-editor-contents');
+                      if (wysiwygContent) {
+                        const html = wysiwygContent.innerHTML || '';
+                        if (html.trim()) {
+                          setEditorContent(html);
+                        }
+                      } else {
+                        // ref를 통해 시도
+                        const refObj = editorRef.current as any;
+                        if (refObj) {
+                          let instance = null;
+                          if (typeof refObj.getInstance === 'function') {
+                            instance = refObj.getInstance();
+                          } else if (refObj.editorInstance) {
+                            instance = refObj.editorInstance;
                           }
-                        } else {
-                          // ref를 통해 시도
-                          const refObj = editorRef.current as any;
-                          if (refObj) {
-                            let inst = null;
-                            if (refObj.getInstance && typeof refObj.getInstance === 'function') {
-                              inst = refObj.getInstance();
-                            } else if (refObj.editorInstance) {
-                              inst = refObj.editorInstance;
-                            }
-                            
-                            if (inst) {
-                              if (typeof inst.getMarkdown === 'function') {
-                                setEditorContent(inst.getMarkdown() || '');
-                              } else if (typeof inst.getHTML === 'function') {
-                                setEditorContent(inst.getHTML() || '');
-                              }
+                          
+                          if (instance) {
+                            if (typeof instance.getMarkdown === 'function') {
+                              setEditorContent(instance.getMarkdown() || '');
+                            } else if (typeof instance.getHTML === 'function') {
+                              setEditorContent(instance.getHTML() || '');
                             }
                           }
                         }

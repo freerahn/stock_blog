@@ -10,7 +10,10 @@ import ko from 'date-fns/locale/ko';
 // Toast UI Editor를 동적으로 로드 (SSR 비활성화)
 const Editor = dynamic(
   () => import('@toast-ui/react-editor').then((mod) => mod.Editor),
-  { ssr: false }
+  { 
+    ssr: false,
+    loading: () => <div>에디터 로딩 중...</div>
+  }
 );
 
 interface AdminPost extends Post {
@@ -118,72 +121,68 @@ export default function Admin() {
     let content = editorContent; // 먼저 state에서 가져오기 시도
 
     // state가 비어있으면 ref에서 직접 가져오기 시도
-    if (!content.trim() && editorRef.current) {
-      console.log('state가 비어있음, ref에서 가져오기 시도');
-      console.log('ref.current 타입:', typeof editorRef.current);
-      console.log('ref.current 키들:', Object.keys(editorRef.current));
-      console.log('ref.current 전체:', editorRef.current);
-      
+    if (!content.trim()) {
       try {
         let editorInstance = null;
 
-        // 다양한 방법으로 인스턴스 찾기 시도
-        if (typeof editorRef.current.getInstance === 'function') {
-          console.log('1. getInstance 메서드 사용');
-          editorInstance = editorRef.current.getInstance();
-          console.log('인스턴스:', editorInstance);
-        } else if (editorRef.current.getInstance && typeof editorRef.current.getInstance === 'function') {
-          console.log('2. getInstance 속성 확인');
-          editorInstance = editorRef.current.getInstance();
-        } else if (editorRef.current.editorInstance) {
-          console.log('3. editorInstance 속성 사용');
-          editorInstance = editorRef.current.editorInstance;
-        } else if (editorRef.current.editor) {
-          console.log('4. editor 속성 사용');
-          editorInstance = editorRef.current.editor;
-        } else if (editorRef.current.getRootElement) {
-          // Editor 컴포넌트 자체에서 인스턴스 접근
-          console.log('5. ref.current 직접 사용 시도');
-          editorInstance = editorRef.current;
+        // 방법 1: ref.current에서 getInstance 찾기
+        if (editorRef.current) {
+          // dynamic import로 인해 ref가 래퍼 객체일 수 있음
+          // 실제 Editor 컴포넌트를 찾기
+          const refObj = editorRef.current as any;
+          
+          // ref.current가 React 컴포넌트 인스턴스인 경우
+          if (refObj.getInstance && typeof refObj.getInstance === 'function') {
+            editorInstance = refObj.getInstance();
+          }
+          // ref.current.editorInstance 같은 속성
+          else if (refObj.editorInstance) {
+            editorInstance = refObj.editorInstance;
+          }
+          // ref.current가 직접 인스턴스인 경우 (getInstance 메서드가 인스턴스에 있을 수 있음)
+          else if (typeof refObj === 'object') {
+            // 모든 속성을 확인하여 에디터 인스턴스 찾기
+            for (const key in refObj) {
+              if (refObj[key] && typeof refObj[key] === 'object') {
+                const candidate = refObj[key];
+                if (candidate.getMarkdown && typeof candidate.getMarkdown === 'function') {
+                  editorInstance = candidate;
+                  break;
+                } else if (candidate.getHTML && typeof candidate.getHTML === 'function') {
+                  editorInstance = candidate;
+                  break;
+                }
+              }
+            }
+          }
         }
 
-        console.log('최종 editorInstance:', editorInstance);
-        console.log('editorInstance 타입:', typeof editorInstance);
-        if (editorInstance) {
-          console.log('editorInstance 키들:', Object.keys(editorInstance));
+        // 방법 2: DOM에서 직접 찾기 (최후의 수단)
+        if (!editorInstance) {
+          const editorDOM = document.querySelector('.toastui-editor-contents');
+          if (editorDOM) {
+            // DOM 요소의 데이터 속성에서 인스턴스 찾기 시도
+            const editorContainer = editorDOM.closest('.toastui-editor');
+            if (editorContainer) {
+              // 에디터 컨테이너에서 인스턴스 찾기
+              const instance = (editorContainer as any).__editorInstance || 
+                               (window as any).__toastuiEditorInstance;
+              if (instance && typeof instance.getMarkdown === 'function') {
+                editorInstance = instance;
+              }
+            }
+          }
         }
 
         if (editorInstance) {
-          // getMarkdown 메서드 시도
           if (typeof editorInstance.getMarkdown === 'function') {
             content = editorInstance.getMarkdown() || '';
-            console.log('✓ getMarkdown 성공:', content.substring(0, 100));
-          } 
-          // getHTML 메서드 시도 (WYSIWYG 모드)
-          else if (typeof editorInstance.getHTML === 'function') {
-            const html = editorInstance.getHTML() || '';
-            content = html;
-            console.log('✓ getHTML 성공:', content.substring(0, 100));
+          } else if (typeof editorInstance.getHTML === 'function') {
+            content = editorInstance.getHTML() || '';
           }
-          // getText 메서드 시도
-          else if (typeof editorInstance.getText === 'function') {
-            content = editorInstance.getText() || '';
-            console.log('✓ getText 성공:', content.substring(0, 100));
-          } 
-          // WYSIWYG 에디터의 경우 다른 방법 시도
-          else if (editorInstance.getMarkdown) {
-            content = editorInstance.getMarkdown() || '';
-            console.log('✓ 직접 getMarkdown 호출 성공');
-          } else {
-            console.error('✗ 사용 가능한 메서드가 없음');
-            console.error('인스턴스 구조:', JSON.stringify(editorInstance, null, 2).substring(0, 500));
-          }
-        } else {
-          console.error('✗ 에디터 인스턴스를 찾을 수 없음');
         }
       } catch (error: any) {
-        console.error('✗ 에디터 내용 가져오기 실패:', error);
-        console.error('에러 상세:', error.message, error.stack);
+        console.error('에디터 내용 가져오기 실패:', error);
       }
     }
 
@@ -267,42 +266,29 @@ export default function Admin() {
 
   // 에디터 ref 콜백
   const handleEditorRef = useCallback((ref: any) => {
-    console.log('handleEditorRef 호출됨:', ref);
     if (ref) {
       editorRef.current = ref;
-      console.log('editorRef.current 설정됨:', editorRef.current);
-      
       // 에디터가 준비되었는지 확인
       setTimeout(() => {
-        try {
-          console.log('에디터 준비 확인 시도...');
-          console.log('ref 타입:', typeof ref);
-          console.log('ref 키들:', Object.keys(ref || {}));
-          
-          if (ref) {
-            // 여러 방법 시도
-            if (typeof ref.getInstance === 'function') {
-              const instance = ref.getInstance();
-              console.log('getInstance() 결과:', instance);
-              if (instance) {
-                setEditorReady(true);
-                console.log('에디터 준비 완료');
-              }
-            } else if (ref.getInstance && typeof ref.getInstance === 'function') {
-              const instance = ref.getInstance();
-              if (instance) {
-                setEditorReady(true);
-              }
-            } else {
-              console.log('getInstance 메서드를 찾을 수 없음, ref 직접 사용');
-              setEditorReady(true);
-            }
-          }
-        } catch (error) {
-          console.error('에디터 준비 확인 실패:', error);
-        }
-      }, 1000);
+        setEditorReady(true);
+      }, 500);
     }
+  }, []);
+
+  // DOM에서 에디터 인스턴스 찾기 (Toast UI Editor는 DOM에 마운트됨)
+  const getEditorInstanceFromDOM = useCallback(() => {
+    try {
+      // Toast UI Editor는 .toastui-editor-contents 또는 .ProseMirror를 사용
+      const editorElement = document.querySelector('.toastui-editor-contents, .ProseMirror');
+      if (editorElement) {
+        // window 객체에서 에디터 인스턴스 찾기 시도
+        // 또는 DOM 요소에서 직접 접근
+        return editorElement;
+      }
+    } catch (error) {
+      console.error('DOM에서 에디터 찾기 실패:', error);
+    }
+    return null;
   }, []);
 
   // 에디터가 준비되면 초기값 설정
@@ -400,41 +386,42 @@ export default function Admin() {
                 language="ko-KR"
                 onChange={() => {
                   // 에디터 내용 변경 시 state 업데이트
-                  console.log('onChange 이벤트 발생');
                   try {
+                    // ref를 통해 인스턴스 가져오기 시도
+                    let instance = null;
+                    
                     if (editorRef.current) {
-                      console.log('onChange - editorRef.current:', editorRef.current);
-                      let instance = null;
-                      
-                      // getInstance 시도
-                      if (typeof editorRef.current.getInstance === 'function') {
+                      // getInstance 메서드가 있는지 확인 (다양한 경로 시도)
+                      if (editorRef.current.getInstance && typeof editorRef.current.getInstance === 'function') {
                         instance = editorRef.current.getInstance();
-                        console.log('onChange - getInstance() 결과:', instance);
-                      } else if (editorRef.current.editorInstance) {
-                        instance = editorRef.current.editorInstance;
-                        console.log('onChange - editorInstance 사용');
-                      } else {
-                        instance = editorRef.current;
-                        console.log('onChange - ref.current 직접 사용');
-                      }
-                      
-                      if (instance) {
-                        if (typeof instance.getMarkdown === 'function') {
-                          const markdown = instance.getMarkdown() || '';
-                          setEditorContent(markdown);
-                          console.log('onChange - getMarkdown 결과:', markdown.substring(0, 50));
-                        } else if (typeof instance.getHTML === 'function') {
-                          const html = instance.getHTML() || '';
-                          setEditorContent(html);
-                          console.log('onChange - getHTML 결과:', html.substring(0, 50));
-                        } else {
-                          console.warn('onChange - 메서드를 찾을 수 없음:', Object.keys(instance));
+                      } else if (typeof editorRef.current === 'object') {
+                        // ref.current가 객체인 경우, 내부 속성 확인
+                        const refObj = editorRef.current as any;
+                        if (refObj.getInstance && typeof refObj.getInstance === 'function') {
+                          instance = refObj.getInstance();
+                        } else if (refObj.editorInstance) {
+                          instance = refObj.editorInstance;
                         }
+                      }
+                    }
+                    
+                    if (instance) {
+                      if (typeof instance.getMarkdown === 'function') {
+                        const markdown = instance.getMarkdown() || '';
+                        setEditorContent(markdown);
+                      } else if (typeof instance.getHTML === 'function') {
+                        const html = instance.getHTML() || '';
+                        setEditorContent(html);
                       }
                     }
                   } catch (error) {
                     console.error('onChange 에러:', error);
                   }
+                }}
+                onLoad={(editorType: string) => {
+                  // 에디터가 로드될 때 호출
+                  console.log('에디터 로드 완료:', editorType);
+                  setEditorReady(true);
                 }}
               />
             </div>

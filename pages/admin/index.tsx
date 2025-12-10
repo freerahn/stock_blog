@@ -376,54 +376,75 @@ export default function Admin() {
 
             <div className="form-group">
               <label className="form-label">내용</label>
-              <Editor
-                initialValue={editingPost?.content || ''}
-                previewStyle="vertical"
-                height="600px"
-                initialEditType="wysiwyg"
-                useCommandShortcut={true}
-                ref={handleEditorRef}
-                language="ko-KR"
-                onChange={() => {
-                  // 에디터 내용 변경 시 state 업데이트
-                  try {
-                    // ref를 통해 인스턴스 가져오기 시도
-                    let instance = null;
-                    
-                    if (editorRef.current) {
-                      // getInstance 메서드가 있는지 확인 (다양한 경로 시도)
-                      if (editorRef.current.getInstance && typeof editorRef.current.getInstance === 'function') {
-                        instance = editorRef.current.getInstance();
-                      } else if (typeof editorRef.current === 'object') {
-                        // ref.current가 객체인 경우, 내부 속성 확인
-                        const refObj = editorRef.current as any;
-                        if (refObj.getInstance && typeof refObj.getInstance === 'function') {
-                          instance = refObj.getInstance();
-                        } else if (refObj.editorInstance) {
-                          instance = refObj.editorInstance;
+              <div id="toast-editor-container">
+                <Editor
+                  initialValue={editingPost?.content || ''}
+                  previewStyle="vertical"
+                  height="600px"
+                  initialEditType="wysiwyg"
+                  useCommandShortcut={true}
+                  ref={handleEditorRef}
+                  language="ko-KR"
+                  onChange={() => {
+                    // 에디터 내용 변경 시 state 업데이트
+                    try {
+                      // DOM에서 에디터 찾기
+                      const editorEl = document.querySelector('.toastui-editor');
+                      if (editorEl) {
+                        // Toast UI Editor는 DOM에 인스턴스를 저장할 수 있음
+                        const instance = (editorEl as any).__editorInstance || 
+                                       (editorEl as any).editorInstance ||
+                                       (window as any).toastui?.Editor?.getInstances?.()?.[0];
+                        
+                        if (instance) {
+                          if (typeof instance.getMarkdown === 'function') {
+                            const markdown = instance.getMarkdown() || '';
+                            setEditorContent(markdown);
+                          } else if (typeof instance.getHTML === 'function') {
+                            const html = instance.getHTML() || '';
+                            setEditorContent(html);
+                          }
+                        } else {
+                          // ref를 통해 시도
+                          const refObj = editorRef.current as any;
+                          if (refObj) {
+                            let inst = null;
+                            if (refObj.getInstance && typeof refObj.getInstance === 'function') {
+                              inst = refObj.getInstance();
+                            } else if (refObj.editorInstance) {
+                              inst = refObj.editorInstance;
+                            }
+                            
+                            if (inst) {
+                              if (typeof inst.getMarkdown === 'function') {
+                                setEditorContent(inst.getMarkdown() || '');
+                              } else if (typeof inst.getHTML === 'function') {
+                                setEditorContent(inst.getHTML() || '');
+                              }
+                            }
+                          }
                         }
                       }
+                    } catch (error) {
+                      console.error('onChange 에러:', error);
                     }
-                    
-                    if (instance) {
-                      if (typeof instance.getMarkdown === 'function') {
-                        const markdown = instance.getMarkdown() || '';
-                        setEditorContent(markdown);
-                      } else if (typeof instance.getHTML === 'function') {
-                        const html = instance.getHTML() || '';
-                        setEditorContent(html);
+                  }}
+                  onLoad={(editorType: string) => {
+                    setEditorReady(true);
+                    // 에디터 로드 후 DOM에서 인스턴스 찾기
+                    setTimeout(() => {
+                      const editorEl = document.querySelector('.toastui-editor');
+                      if (editorEl && editorRef.current) {
+                        // 에디터 인스턴스를 ref에 저장 시도
+                        const instance = (editorEl as any).__editorInstance;
+                        if (instance) {
+                          (editorRef.current as any).editorInstance = instance;
+                        }
                       }
-                    }
-                  } catch (error) {
-                    console.error('onChange 에러:', error);
-                  }
-                }}
-                onLoad={(editorType: string) => {
-                  // 에디터가 로드될 때 호출
-                  console.log('에디터 로드 완료:', editorType);
-                  setEditorReady(true);
-                }}
-              />
+                    }, 100);
+                  }}
+                />
+              </div>
             </div>
 
             <div className="form-actions">

@@ -130,7 +130,8 @@ async function handleGitHubAPI(
           try {
             const content = await getFile(`content/posts/${slug}.md`);
             if (!content) return null;
-            const matter = await import('gray-matter');
+            const matterModule = await import('gray-matter');
+            const matter = matterModule.default || matterModule;
             const { data } = matter(content);
             return {
               slug,

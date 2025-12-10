@@ -25,6 +25,7 @@ export default function Admin() {
   const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const editorRef = useRef<any>(null);
+  const [editorReady, setEditorReady] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -107,52 +108,50 @@ export default function Admin() {
 
     // 에디터 인스턴스 안전하게 가져오기
     let content = '';
-    console.log('에디터 ref 상태:', { 
-      hasRef: !!editorRef.current,
-      refType: typeof editorRef.current,
-      hasGetInstance: editorRef.current && typeof editorRef.current.getInstance === 'function'
-    });
 
-    if (editorRef.current) {
-      try {
-        // getInstance 메서드가 있는지 확인
-        if (typeof editorRef.current.getInstance === 'function') {
-          const editorInstance = editorRef.current.getInstance();
-          console.log('에디터 인스턴스:', {
-            hasInstance: !!editorInstance,
-            hasGetMarkdown: editorInstance && typeof editorInstance.getMarkdown === 'function',
-            hasGetHTML: editorInstance && typeof editorInstance.getHTML === 'function'
-          });
-
-          if (editorInstance) {
-            // WYSIWYG 모드에서는 getMarkdown() 또는 getHTML() 사용 가능
-            if (typeof editorInstance.getMarkdown === 'function') {
-              content = editorInstance.getMarkdown() || '';
-              console.log('getMarkdown 결과:', content.substring(0, 100));
-            } else if (typeof editorInstance.getHTML === 'function') {
-              // HTML을 마크다운으로 변환하거나 그대로 사용
-              content = editorInstance.getHTML() || '';
-              console.log('getHTML 결과:', content.substring(0, 100));
-            }
-          }
-        } else {
-          // getInstance가 없으면 직접 접근 시도
-          console.log('getInstance 없음, 직접 접근 시도');
-          if (typeof editorRef.current.getMarkdown === 'function') {
-            content = editorRef.current.getMarkdown() || '';
-          } else if (typeof editorRef.current.getHTML === 'function') {
-            content = editorRef.current.getHTML() || '';
-          }
-        }
-      } catch (error) {
-        console.error('에디터 내용 가져오기 실패:', error);
-      }
+    if (!editorRef.current) {
+      alert('에디터가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
+      return;
     }
 
-    console.log('최종 content:', content.substring(0, 100), '길이:', content.length);
+    try {
+      let editorInstance = null;
+
+      // getInstance 메서드로 인스턴스 가져오기
+      if (typeof editorRef.current.getInstance === 'function') {
+        editorInstance = editorRef.current.getInstance();
+      } else if (editorRef.current.editorInstance) {
+        // 직접 인스턴스 접근
+        editorInstance = editorRef.current.editorInstance;
+      } else {
+        // ref 자체가 인스턴스일 수 있음
+        editorInstance = editorRef.current;
+      }
+
+      if (editorInstance) {
+        // getMarkdown 메서드 시도
+        if (typeof editorInstance.getMarkdown === 'function') {
+          content = editorInstance.getMarkdown() || '';
+        } 
+        // getHTML 메서드 시도 (WYSIWYG 모드)
+        else if (typeof editorInstance.getHTML === 'function') {
+          const html = editorInstance.getHTML() || '';
+          // HTML이 있으면 그대로 사용 (나중에 마크다운으로 변환 가능)
+          content = html;
+        }
+        // getText 메서드 시도
+        else if (typeof editorInstance.getText === 'function') {
+          content = editorInstance.getText() || '';
+        }
+      }
+    } catch (error) {
+      console.error('에디터 내용 가져오기 실패:', error);
+      alert('에디터 내용을 가져오는 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
+      return;
+    }
 
     if (!content.trim()) {
-      alert('내용을 입력해주세요. (에디터가 준비되지 않았을 수 있습니다. 잠시 후 다시 시도해주세요.)');
+      alert('내용을 입력해주세요.');
       return;
     }
 
@@ -229,6 +228,19 @@ export default function Admin() {
   const handleEditorRef = useCallback((ref: any) => {
     if (ref) {
       editorRef.current = ref;
+      // 에디터가 준비되었는지 확인
+      setTimeout(() => {
+        try {
+          if (ref && typeof ref.getInstance === 'function') {
+            const instance = ref.getInstance();
+            if (instance) {
+              setEditorReady(true);
+            }
+          }
+        } catch (error) {
+          console.error('에디터 준비 확인 실패:', error);
+        }
+      }, 500);
     }
   }, []);
 

@@ -1,0 +1,9 @@
+name = "stock-blog"
+compatibility_date = "2023-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[build]
+command = ""
+
+[env.production.vars]
+

@@ -120,46 +120,70 @@ export default function Admin() {
     // state가 비어있으면 ref에서 직접 가져오기 시도
     if (!content.trim() && editorRef.current) {
       console.log('state가 비어있음, ref에서 가져오기 시도');
+      console.log('ref.current 타입:', typeof editorRef.current);
+      console.log('ref.current 키들:', Object.keys(editorRef.current));
+      console.log('ref.current 전체:', editorRef.current);
+      
       try {
         let editorInstance = null;
 
-        // getInstance 메서드로 인스턴스 가져오기
+        // 다양한 방법으로 인스턴스 찾기 시도
         if (typeof editorRef.current.getInstance === 'function') {
-          console.log('getInstance 메서드 사용');
+          console.log('1. getInstance 메서드 사용');
           editorInstance = editorRef.current.getInstance();
           console.log('인스턴스:', editorInstance);
+        } else if (editorRef.current.getInstance && typeof editorRef.current.getInstance === 'function') {
+          console.log('2. getInstance 속성 확인');
+          editorInstance = editorRef.current.getInstance();
         } else if (editorRef.current.editorInstance) {
-          console.log('직접 인스턴스 접근');
+          console.log('3. editorInstance 속성 사용');
           editorInstance = editorRef.current.editorInstance;
-        } else {
-          console.log('ref 자체가 인스턴스로 사용');
+        } else if (editorRef.current.editor) {
+          console.log('4. editor 속성 사용');
+          editorInstance = editorRef.current.editor;
+        } else if (editorRef.current.getRootElement) {
+          // Editor 컴포넌트 자체에서 인스턴스 접근
+          console.log('5. ref.current 직접 사용 시도');
           editorInstance = editorRef.current;
+        }
+
+        console.log('최종 editorInstance:', editorInstance);
+        console.log('editorInstance 타입:', typeof editorInstance);
+        if (editorInstance) {
+          console.log('editorInstance 키들:', Object.keys(editorInstance));
         }
 
         if (editorInstance) {
           // getMarkdown 메서드 시도
           if (typeof editorInstance.getMarkdown === 'function') {
             content = editorInstance.getMarkdown() || '';
-            console.log('getMarkdown 결과:', content.substring(0, 100));
+            console.log('✓ getMarkdown 성공:', content.substring(0, 100));
           } 
           // getHTML 메서드 시도 (WYSIWYG 모드)
           else if (typeof editorInstance.getHTML === 'function') {
             const html = editorInstance.getHTML() || '';
             content = html;
-            console.log('getHTML 결과:', content.substring(0, 100));
+            console.log('✓ getHTML 성공:', content.substring(0, 100));
           }
           // getText 메서드 시도
           else if (typeof editorInstance.getText === 'function') {
             content = editorInstance.getText() || '';
-            console.log('getText 결과:', content.substring(0, 100));
+            console.log('✓ getText 성공:', content.substring(0, 100));
+          } 
+          // WYSIWYG 에디터의 경우 다른 방법 시도
+          else if (editorInstance.getMarkdown) {
+            content = editorInstance.getMarkdown() || '';
+            console.log('✓ 직접 getMarkdown 호출 성공');
           } else {
-            console.error('사용 가능한 메서드가 없음:', Object.keys(editorInstance));
+            console.error('✗ 사용 가능한 메서드가 없음');
+            console.error('인스턴스 구조:', JSON.stringify(editorInstance, null, 2).substring(0, 500));
           }
         } else {
-          console.error('에디터 인스턴스를 찾을 수 없음');
+          console.error('✗ 에디터 인스턴스를 찾을 수 없음');
         }
-      } catch (error) {
-        console.error('에디터 내용 가져오기 실패:', error);
+      } catch (error: any) {
+        console.error('✗ 에디터 내용 가져오기 실패:', error);
+        console.error('에러 상세:', error.message, error.stack);
       }
     }
 
@@ -243,21 +267,41 @@ export default function Admin() {
 
   // 에디터 ref 콜백
   const handleEditorRef = useCallback((ref: any) => {
+    console.log('handleEditorRef 호출됨:', ref);
     if (ref) {
       editorRef.current = ref;
+      console.log('editorRef.current 설정됨:', editorRef.current);
+      
       // 에디터가 준비되었는지 확인
       setTimeout(() => {
         try {
-          if (ref && typeof ref.getInstance === 'function') {
-            const instance = ref.getInstance();
-            if (instance) {
+          console.log('에디터 준비 확인 시도...');
+          console.log('ref 타입:', typeof ref);
+          console.log('ref 키들:', Object.keys(ref || {}));
+          
+          if (ref) {
+            // 여러 방법 시도
+            if (typeof ref.getInstance === 'function') {
+              const instance = ref.getInstance();
+              console.log('getInstance() 결과:', instance);
+              if (instance) {
+                setEditorReady(true);
+                console.log('에디터 준비 완료');
+              }
+            } else if (ref.getInstance && typeof ref.getInstance === 'function') {
+              const instance = ref.getInstance();
+              if (instance) {
+                setEditorReady(true);
+              }
+            } else {
+              console.log('getInstance 메서드를 찾을 수 없음, ref 직접 사용');
               setEditorReady(true);
             }
           }
         } catch (error) {
           console.error('에디터 준비 확인 실패:', error);
         }
-      }, 500);
+      }, 1000);
     }
   }, []);
 

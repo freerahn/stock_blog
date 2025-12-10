@@ -50,10 +50,12 @@ git push -u origin main
 1. Cloudflare Dashboard에서 Pages 프로젝트 생성
 2. GitHub 저장소 연결
 3. 빌드 설정:
-   - Build command: `CF_PAGES=1 npm run build`
+   - Build command: `npm run build`
    - Build output directory: `out`
    - Node version: 18 이상
    - Environment variables: `GITHUB_TOKEN` 추가 (GitHub Personal Access Token)
+     - GitHub > Settings > Developer settings > Personal access tokens
+     - `repo` 권한 필요
 4. Functions 설정:
    - `functions/api/posts.ts` 파일이 자동으로 인식됩니다
    - `/api/posts` 경로로 API가 자동 라우팅됩니다

@@ -117,9 +117,7 @@ export default function Admin() {
 
     setLoading(true);
     try {
-      const apiUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
-        ? '/api/posts'
-        : '/api/posts';
+      const apiUrl = '/api/posts';
         
       const method = editingPost ? 'PUT' : 'POST';
       const body = editingPost
@@ -135,6 +133,8 @@ export default function Admin() {
             excerpt,
           };
 
+      console.log('API 호출:', { apiUrl, method, body: { ...body, content: content.substring(0, 50) + '...' } });
+
       const response = await fetch(apiUrl, {
         method,
         headers: {
@@ -143,8 +143,11 @@ export default function Admin() {
         body: JSON.stringify(body),
       });
 
+      console.log('API 응답:', { status: response.status, ok: response.ok });
+
       if (response.ok) {
         const data = await response.json();
+        console.log('저장 성공:', data);
         setShowEditor(false);
         setEditingPost(null);
         setTitle('');
@@ -156,13 +159,20 @@ export default function Admin() {
         }, editingPost ? 1000 : 2000);
         alert(editingPost ? '게시글이 수정되었습니다. GitHub에 반영되는데 시간이 걸릴 수 있습니다.' : '게시글이 작성되었습니다. GitHub에 반영되는데 시간이 걸릴 수 있습니다.');
       } else {
-        const data = await response.json();
-        alert(data.error || '게시글 저장에 실패했습니다.');
+        const errorText = await response.text();
+        console.error('API 에러 응답:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `서버 오류: ${response.status}` };
+        }
+        alert(errorData.error || `게시글 저장에 실패했습니다. (${response.status})`);
         setLoading(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('게시글 저장 실패:', error);
-      alert('게시글 저장에 실패했습니다.');
+      alert(`게시글 저장에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
       setLoading(false);
     }
   };

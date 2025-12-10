@@ -93,7 +93,55 @@ export const onRequest: any = async (context: any) => {
           .filter((file: any) => file.type === 'file' && file.name.endsWith('.md'))
           .map((file: any) => file.name.replace(/\.md$/, ''));
         
-        return new Response(JSON.stringify({ posts: slugs }), {
+        // 각 게시글의 메타데이터 가져오기
+        const posts = await Promise.all(
+          slugs.map(async (slug: string) => {
+            try {
+              const fileContent = await githubApi(`/contents/${CONTENT_PATH}/${slug}.md?ref=${GITHUB_BRANCH}`, token);
+              const content = decodeBase64(fileContent.content.replace(/\n/g, ''));
+              
+              // frontmatter 파싱 (간단한 방식)
+              const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+              if (!frontmatterMatch) return null;
+              
+              const frontmatterText = frontmatterMatch[1];
+              const postContent = frontmatterMatch[2];
+              
+              // 간단한 frontmatter 파싱
+              const metaData: any = { date: new Date().toISOString() };
+              frontmatterText.split('\n').forEach((line: string) => {
+                const match = line.match(/^(\w+):\s*(.+)$/);
+                if (match) {
+                  const key = match[1];
+                  let value = match[2].trim();
+                  // 따옴표 제거
+                  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                    value = value.slice(1, -1);
+                  }
+                  metaData[key] = value;
+                }
+              });
+              
+              return {
+                slug,
+                metaData,
+                content: '', // 목록에서는 내용 불필요
+              };
+            } catch {
+              return null;
+            }
+          })
+        );
+        
+        const validPosts = posts.filter((p): p is NonNullable<typeof p> => p !== null);
+        // 날짜순 정렬
+        validPosts.sort((a: any, b: any) => {
+          const dateA = new Date(a.metaData.date).getTime();
+          const dateB = new Date(b.metaData.date).getTime();
+          return dateB - dateA;
+        });
+        
+        return new Response(JSON.stringify({ posts: validPosts }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       } catch (error: any) {

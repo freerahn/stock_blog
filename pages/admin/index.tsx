@@ -24,6 +24,7 @@ export default function Admin() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
+  const [editorContent, setEditorContent] = useState('');
   const editorRef = useRef<any>(null);
   const [editorReady, setEditorReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,6 +52,7 @@ export default function Admin() {
     setEditingPost(null);
     setTitle('');
     setExcerpt('');
+    setEditorContent('');
     setShowEditor(true);
     // 에디터가 준비되면 자동으로 빈 내용으로 설정됨
   };
@@ -59,6 +61,7 @@ export default function Admin() {
     setEditingPost(post);
     setTitle(post.metaData.title);
     setExcerpt(post.metaData.excerpt || '');
+    setEditorContent(post.content || '');
     setShowEditor(true);
     // 에디터가 준비되면 useEffect에서 설정됨
   };
@@ -101,54 +104,67 @@ export default function Admin() {
   };
 
   const handleSavePost = async () => {
+    console.log('저장 버튼 클릭');
+    console.log('제목:', title);
+    console.log('에디터 ref:', editorRef.current);
+    console.log('에디터 content state:', editorContent);
+
     if (!title.trim()) {
       alert('제목을 입력해주세요.');
       return;
     }
 
     // 에디터 인스턴스 안전하게 가져오기
-    let content = '';
+    let content = editorContent; // 먼저 state에서 가져오기 시도
 
-    if (!editorRef.current) {
-      alert('에디터가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
-      return;
+    // state가 비어있으면 ref에서 직접 가져오기 시도
+    if (!content.trim() && editorRef.current) {
+      console.log('state가 비어있음, ref에서 가져오기 시도');
+      try {
+        let editorInstance = null;
+
+        // getInstance 메서드로 인스턴스 가져오기
+        if (typeof editorRef.current.getInstance === 'function') {
+          console.log('getInstance 메서드 사용');
+          editorInstance = editorRef.current.getInstance();
+          console.log('인스턴스:', editorInstance);
+        } else if (editorRef.current.editorInstance) {
+          console.log('직접 인스턴스 접근');
+          editorInstance = editorRef.current.editorInstance;
+        } else {
+          console.log('ref 자체가 인스턴스로 사용');
+          editorInstance = editorRef.current;
+        }
+
+        if (editorInstance) {
+          // getMarkdown 메서드 시도
+          if (typeof editorInstance.getMarkdown === 'function') {
+            content = editorInstance.getMarkdown() || '';
+            console.log('getMarkdown 결과:', content.substring(0, 100));
+          } 
+          // getHTML 메서드 시도 (WYSIWYG 모드)
+          else if (typeof editorInstance.getHTML === 'function') {
+            const html = editorInstance.getHTML() || '';
+            content = html;
+            console.log('getHTML 결과:', content.substring(0, 100));
+          }
+          // getText 메서드 시도
+          else if (typeof editorInstance.getText === 'function') {
+            content = editorInstance.getText() || '';
+            console.log('getText 결과:', content.substring(0, 100));
+          } else {
+            console.error('사용 가능한 메서드가 없음:', Object.keys(editorInstance));
+          }
+        } else {
+          console.error('에디터 인스턴스를 찾을 수 없음');
+        }
+      } catch (error) {
+        console.error('에디터 내용 가져오기 실패:', error);
+      }
     }
 
-    try {
-      let editorInstance = null;
-
-      // getInstance 메서드로 인스턴스 가져오기
-      if (typeof editorRef.current.getInstance === 'function') {
-        editorInstance = editorRef.current.getInstance();
-      } else if (editorRef.current.editorInstance) {
-        // 직접 인스턴스 접근
-        editorInstance = editorRef.current.editorInstance;
-      } else {
-        // ref 자체가 인스턴스일 수 있음
-        editorInstance = editorRef.current;
-      }
-
-      if (editorInstance) {
-        // getMarkdown 메서드 시도
-        if (typeof editorInstance.getMarkdown === 'function') {
-          content = editorInstance.getMarkdown() || '';
-        } 
-        // getHTML 메서드 시도 (WYSIWYG 모드)
-        else if (typeof editorInstance.getHTML === 'function') {
-          const html = editorInstance.getHTML() || '';
-          // HTML이 있으면 그대로 사용 (나중에 마크다운으로 변환 가능)
-          content = html;
-        }
-        // getText 메서드 시도
-        else if (typeof editorInstance.getText === 'function') {
-          content = editorInstance.getText() || '';
-        }
-      }
-    } catch (error) {
-      console.error('에디터 내용 가져오기 실패:', error);
-      alert('에디터 내용을 가져오는 중 오류가 발생했습니다. 콘솔을 확인해주세요.');
-      return;
-    }
+    console.log('최종 content 길이:', content.length);
+    console.log('최종 content (처음 100자):', content.substring(0, 100));
 
     if (!content.trim()) {
       alert('내용을 입력해주세요.');
@@ -222,6 +238,7 @@ export default function Admin() {
     setEditingPost(null);
     setTitle('');
     setExcerpt('');
+    setEditorContent('');
   };
 
   // 에디터 ref 콜백
@@ -337,6 +354,25 @@ export default function Admin() {
                 useCommandShortcut={true}
                 ref={handleEditorRef}
                 language="ko-KR"
+                onChange={() => {
+                  // 에디터 내용 변경 시 state 업데이트
+                  try {
+                    if (editorRef.current && typeof editorRef.current.getInstance === 'function') {
+                      const instance = editorRef.current.getInstance();
+                      if (instance && typeof instance.getMarkdown === 'function') {
+                        const markdown = instance.getMarkdown() || '';
+                        setEditorContent(markdown);
+                        console.log('onChange - content 업데이트:', markdown.substring(0, 50));
+                      } else if (instance && typeof instance.getHTML === 'function') {
+                        const html = instance.getHTML() || '';
+                        setEditorContent(html);
+                        console.log('onChange - HTML 업데이트:', html.substring(0, 50));
+                      }
+                    }
+                  } catch (error) {
+                    console.error('onChange 에러:', error);
+                  }
+                }}
               />
             </div>
 

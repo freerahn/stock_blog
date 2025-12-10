@@ -57,7 +57,8 @@ async function getFileSha(path: string, token: string): Promise<string | null> {
   }
 }
 
-export const onRequest: PagesFunction<Env> = async (context) => {
+// @ts-ignore - Cloudflare Pages Functions 타입
+export const onRequest: any = async (context: any) => {
   const { request, env } = context;
   const token = env.GITHUB_TOKEN;
 

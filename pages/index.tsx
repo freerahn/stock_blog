@@ -2,7 +2,7 @@ import { GetStaticProps } from 'next';
 import Link from 'next/link';
 import { getAllPosts, Post } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ko } from 'date-fns/locale/ko';
+import ko from 'date-fns/locale/ko';
 
 interface HomeProps {
   posts: Post[];

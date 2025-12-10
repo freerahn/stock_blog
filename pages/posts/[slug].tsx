@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getPostBySlug, getAllPostSlugs, getAllPosts, Post } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ko } from 'date-fns/locale/ko';
+import ko from 'date-fns/locale/ko';
 import { useState, useEffect } from 'react';
 
 interface PostDetailProps {

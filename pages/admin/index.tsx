@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import '@toast-ui/editor/dist/toastui-editor.css';
 import { Post, getAllPosts } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ko } from 'date-fns/locale/ko';
+import ko from 'date-fns/locale/ko';
 
 // Toast UI Editor를 동적으로 로드 (SSR 비활성화)
 const Editor = dynamic(

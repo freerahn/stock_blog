@@ -1,0 +1,12 @@
+# Cloudflare Workers Functions 설정 예시
+# 이 파일을 참고하여 Cloudflare Pages에 Functions를 추가할 수 있습니다.
+# Cloudflare Pages에서는 /functions 디렉토리를 자동으로 인식합니다.
+
+name = "stock-blog"
+compatibility_date = "2023-01-01"
+
+[env.production]
+routes = [
+  { pattern = "your-domain.com/*", zone_name = "your-domain.com" }
+]
+

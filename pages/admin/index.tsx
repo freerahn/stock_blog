@@ -107,19 +107,52 @@ export default function Admin() {
 
     // 에디터 인스턴스 안전하게 가져오기
     let content = '';
-    if (editorRef.current && typeof editorRef.current.getInstance === 'function') {
+    console.log('에디터 ref 상태:', { 
+      hasRef: !!editorRef.current,
+      refType: typeof editorRef.current,
+      hasGetInstance: editorRef.current && typeof editorRef.current.getInstance === 'function'
+    });
+
+    if (editorRef.current) {
       try {
-        const editorInstance = editorRef.current.getInstance();
-        if (editorInstance && typeof editorInstance.getMarkdown === 'function') {
-          content = editorInstance.getMarkdown() || '';
+        // getInstance 메서드가 있는지 확인
+        if (typeof editorRef.current.getInstance === 'function') {
+          const editorInstance = editorRef.current.getInstance();
+          console.log('에디터 인스턴스:', {
+            hasInstance: !!editorInstance,
+            hasGetMarkdown: editorInstance && typeof editorInstance.getMarkdown === 'function',
+            hasGetHTML: editorInstance && typeof editorInstance.getHTML === 'function'
+          });
+
+          if (editorInstance) {
+            // WYSIWYG 모드에서는 getMarkdown() 또는 getHTML() 사용 가능
+            if (typeof editorInstance.getMarkdown === 'function') {
+              content = editorInstance.getMarkdown() || '';
+              console.log('getMarkdown 결과:', content.substring(0, 100));
+            } else if (typeof editorInstance.getHTML === 'function') {
+              // HTML을 마크다운으로 변환하거나 그대로 사용
+              content = editorInstance.getHTML() || '';
+              console.log('getHTML 결과:', content.substring(0, 100));
+            }
+          }
+        } else {
+          // getInstance가 없으면 직접 접근 시도
+          console.log('getInstance 없음, 직접 접근 시도');
+          if (typeof editorRef.current.getMarkdown === 'function') {
+            content = editorRef.current.getMarkdown() || '';
+          } else if (typeof editorRef.current.getHTML === 'function') {
+            content = editorRef.current.getHTML() || '';
+          }
         }
       } catch (error) {
         console.error('에디터 내용 가져오기 실패:', error);
       }
     }
 
+    console.log('최종 content:', content.substring(0, 100), '길이:', content.length);
+
     if (!content.trim()) {
-      alert('내용을 입력해주세요.');
+      alert('내용을 입력해주세요. (에디터가 준비되지 않았을 수 있습니다. 잠시 후 다시 시도해주세요.)');
       return;
     }
 

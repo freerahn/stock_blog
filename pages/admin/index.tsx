@@ -51,9 +51,7 @@ export default function Admin() {
     setTitle('');
     setExcerpt('');
     setShowEditor(true);
-    if (editorRef) {
-      editorRef.getInstance().setMarkdown('');
-    }
+    // 에디터가 준비되면 자동으로 빈 내용으로 설정됨
   };
 
   const handleEditPost = (post: Post) => {
@@ -61,9 +59,7 @@ export default function Admin() {
     setTitle(post.metaData.title);
     setExcerpt(post.metaData.excerpt || '');
     setShowEditor(true);
-    if (editorRef) {
-      editorRef.getInstance().setMarkdown(post.content);
-    }
+    // 에디터가 준비되면 useEffect에서 설정됨
   };
 
   const handleDeletePost = async (slug: string, title: string) => {
@@ -109,7 +105,19 @@ export default function Admin() {
       return;
     }
 
-    const content = editorRef?.getInstance().getMarkdown() || '';
+    // 에디터 인스턴스 안전하게 가져오기
+    let content = '';
+    if (editorRef && typeof editorRef.getInstance === 'function') {
+      try {
+        const editorInstance = editorRef.getInstance();
+        if (editorInstance && typeof editorInstance.getMarkdown === 'function') {
+          content = editorInstance.getMarkdown() || '';
+        }
+      } catch (error) {
+        console.error('에디터 내용 가져오기 실패:', error);
+      }
+    }
+
     if (!content.trim()) {
       alert('내용을 입력해주세요.');
       return;
@@ -182,10 +190,35 @@ export default function Admin() {
     setEditingPost(null);
     setTitle('');
     setExcerpt('');
-    if (editorRef) {
-      editorRef.getInstance().setMarkdown('');
-    }
   };
+
+  // 에디터가 준비되면 초기값 설정
+  useEffect(() => {
+    if (showEditor && editorRef && typeof editorRef.getInstance === 'function') {
+      try {
+        const editorInstance = editorRef.getInstance();
+        if (editorInstance) {
+          if (editingPost && editingPost.content) {
+            // 수정 모드: 기존 내용 설정
+            setTimeout(() => {
+              if (editorRef && typeof editorRef.getInstance === 'function') {
+                editorRef.getInstance()?.setMarkdown(editingPost.content);
+              }
+            }, 100);
+          } else {
+            // 새 글 모드: 빈 내용
+            setTimeout(() => {
+              if (editorRef && typeof editorRef.getInstance === 'function') {
+                editorRef.getInstance()?.setMarkdown('');
+              }
+            }, 100);
+          }
+        }
+      } catch (error) {
+        console.error('에디터 초기화 실패:', error);
+      }
+    }
+  }, [showEditor, editorRef, editingPost]);
 
   return (
     <>
@@ -252,7 +285,11 @@ export default function Admin() {
                 height="600px"
                 initialEditType="wysiwyg"
                 useCommandShortcut={true}
-                ref={setEditorRef}
+                ref={(ref) => {
+                  if (ref) {
+                    setEditorRef(ref);
+                  }
+                }}
                 language="ko-KR"
               />
             </div>

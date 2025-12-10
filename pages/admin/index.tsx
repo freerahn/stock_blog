@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -24,7 +24,7 @@ export default function Admin() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
-  const [editorRef, setEditorRef] = useState<any>(null);
+  const editorRef = useRef<any>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -107,9 +107,9 @@ export default function Admin() {
 
     // 에디터 인스턴스 안전하게 가져오기
     let content = '';
-    if (editorRef && typeof editorRef.getInstance === 'function') {
+    if (editorRef.current && typeof editorRef.current.getInstance === 'function') {
       try {
-        const editorInstance = editorRef.getInstance();
+        const editorInstance = editorRef.current.getInstance();
         if (editorInstance && typeof editorInstance.getMarkdown === 'function') {
           content = editorInstance.getMarkdown() || '';
         }
@@ -192,33 +192,38 @@ export default function Admin() {
     setExcerpt('');
   };
 
+  // 에디터 ref 콜백
+  const handleEditorRef = useCallback((ref: any) => {
+    if (ref) {
+      editorRef.current = ref;
+    }
+  }, []);
+
   // 에디터가 준비되면 초기값 설정
   useEffect(() => {
-    if (showEditor && editorRef && typeof editorRef.getInstance === 'function') {
+    if (!showEditor) return;
+
+    const timer = setTimeout(() => {
       try {
-        const editorInstance = editorRef.getInstance();
-        if (editorInstance) {
-          if (editingPost && editingPost.content) {
-            // 수정 모드: 기존 내용 설정
-            setTimeout(() => {
-              if (editorRef && typeof editorRef.getInstance === 'function') {
-                editorRef.getInstance()?.setMarkdown(editingPost.content);
-              }
-            }, 100);
-          } else {
-            // 새 글 모드: 빈 내용
-            setTimeout(() => {
-              if (editorRef && typeof editorRef.getInstance === 'function') {
-                editorRef.getInstance()?.setMarkdown('');
-              }
-            }, 100);
+        if (editorRef.current && typeof editorRef.current.getInstance === 'function') {
+          const editorInstance = editorRef.current.getInstance();
+          if (editorInstance && typeof editorInstance.setMarkdown === 'function') {
+            if (editingPost && editingPost.content) {
+              // 수정 모드: 기존 내용 설정
+              editorInstance.setMarkdown(editingPost.content);
+            } else if (!editingPost) {
+              // 새 글 모드: 빈 내용
+              editorInstance.setMarkdown('');
+            }
           }
         }
       } catch (error) {
         console.error('에디터 초기화 실패:', error);
       }
-    }
-  }, [showEditor, editorRef, editingPost]);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [showEditor, editingPost]);
 
   return (
     <>
@@ -285,11 +290,7 @@ export default function Admin() {
                 height="600px"
                 initialEditType="wysiwyg"
                 useCommandShortcut={true}
-                ref={(ref) => {
-                  if (ref) {
-                    setEditorRef(ref);
-                  }
-                }}
+                ref={handleEditorRef}
                 language="ko-KR"
               />
             </div>

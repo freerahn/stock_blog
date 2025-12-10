@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, forwardRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -8,13 +8,22 @@ import { format } from 'date-fns';
 import ko from 'date-fns/locale/ko';
 
 // Toast UI Editor를 동적으로 로드 (SSR 비활성화)
-const Editor = dynamic(
-  () => import('@toast-ui/react-editor').then((mod) => mod.Editor),
+// forwardRef를 사용하여 ref 전달 보장
+const EditorComponent = dynamic(
+  () => import('@toast-ui/react-editor').then((mod) => {
+    const Editor = mod.Editor;
+    // forwardRef로 래핑하여 ref 전달 보장
+    return forwardRef((props: any, ref: any) => (
+      <Editor {...props} ref={ref} />
+    ));
+  }),
   { 
     ssr: false,
     loading: () => <div>에디터 로딩 중...</div>
   }
 );
+
+const Editor = EditorComponent as any;
 
 interface AdminPost extends Post {
   editing?: boolean;

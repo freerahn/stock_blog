@@ -400,17 +400,36 @@ export default function Admin() {
                 language="ko-KR"
                 onChange={() => {
                   // 에디터 내용 변경 시 state 업데이트
+                  console.log('onChange 이벤트 발생');
                   try {
-                    if (editorRef.current && typeof editorRef.current.getInstance === 'function') {
-                      const instance = editorRef.current.getInstance();
-                      if (instance && typeof instance.getMarkdown === 'function') {
-                        const markdown = instance.getMarkdown() || '';
-                        setEditorContent(markdown);
-                        console.log('onChange - content 업데이트:', markdown.substring(0, 50));
-                      } else if (instance && typeof instance.getHTML === 'function') {
-                        const html = instance.getHTML() || '';
-                        setEditorContent(html);
-                        console.log('onChange - HTML 업데이트:', html.substring(0, 50));
+                    if (editorRef.current) {
+                      console.log('onChange - editorRef.current:', editorRef.current);
+                      let instance = null;
+                      
+                      // getInstance 시도
+                      if (typeof editorRef.current.getInstance === 'function') {
+                        instance = editorRef.current.getInstance();
+                        console.log('onChange - getInstance() 결과:', instance);
+                      } else if (editorRef.current.editorInstance) {
+                        instance = editorRef.current.editorInstance;
+                        console.log('onChange - editorInstance 사용');
+                      } else {
+                        instance = editorRef.current;
+                        console.log('onChange - ref.current 직접 사용');
+                      }
+                      
+                      if (instance) {
+                        if (typeof instance.getMarkdown === 'function') {
+                          const markdown = instance.getMarkdown() || '';
+                          setEditorContent(markdown);
+                          console.log('onChange - getMarkdown 결과:', markdown.substring(0, 50));
+                        } else if (typeof instance.getHTML === 'function') {
+                          const html = instance.getHTML() || '';
+                          setEditorContent(html);
+                          console.log('onChange - getHTML 결과:', html.substring(0, 50));
+                        } else {
+                          console.warn('onChange - 메서드를 찾을 수 없음:', Object.keys(instance));
+                        }
                       }
                     }
                   } catch (error) {
